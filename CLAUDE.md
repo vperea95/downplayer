@@ -28,7 +28,8 @@ El repositorio **no contiene** las carpetas `android/` ni `ios/`. El workflow `.
 4. Toma la primera línea (`package ...`) del `MainActivity.kt` generado y le pega el resto de `plataforma/android/MainActivity.kt`. **La primera línea de `plataforma/android/MainActivity.kt` debe ser siempre la línea `package`.**
 5. `python3 plataforma/android/configurar_gradle.py android/app` modifica el `build.gradle.kts` (o `.gradle`) generado: `minSdk = 24`, `packaging.jniLibs.useLegacyPackaging = true`, reglas de ProGuard y las dependencias `io.github.junkfood02.youtubedl-android:library` y `:ffmpeg` (versión en `YTDL_VERSION`). Falla a propósito si no encuentra la línea `minSdk`.
 6. `flutter pub get` (si falla, `flutter pub upgrade --major-versions`).
-7. `flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64` y sube ambos APK en el artifact `downplayer-apk`. **El que sirve para casi todos los celulares es `app-arm64-v8a-release.apk`**; `armeabi-v7a` es para celulares viejos de 32 bits.
+7. `dart run flutter_launcher_icons` y `dart run flutter_native_splash:create` generan el ícono y la pantalla de arranque (configurados al final de `pubspec.yaml`).
+8. `flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64` y sube ambos APK en el artifact `downplayer-apk`. **El que sirve para casi todos los celulares es `app-arm64-v8a-release.apk`**; `armeabi-v7a` es para celulares viejos de 32 bits.
 
 Notas:
 - Cualquier cambio nativo de Android va en `plataforma/android/` y, si hace falta, en el workflow o en `configurar_gradle.py`.
@@ -44,6 +45,7 @@ Notas:
 - `path_provider`: carpeta de miniaturas.
 - `video_player`: reproductor interno (abre los `content://` de la galería con `VideoPlayerController.contentUri`).
 - `webview_flutter`: inicio de sesión opcional en Instagram y Facebook.
+- `flutter_launcher_icons` y `flutter_native_splash` (dev): ícono y pantalla de arranque, generados en el workflow.
 - Estado con `ChangeNotifier` + `ListenableBuilder` (sin provider ni riverpod). Las dependencias se pasan por constructor desde `main.dart`.
 
 ## Estructura
@@ -51,7 +53,7 @@ Notas:
 ```
 lib/
   main.dart                        Crea Engine, HistoryService, AccountsService y DownloadManager; engine.init() después de runApp
-  theme.dart                       AppColors (rosa de marca #FE2C55) y AppTitle ("Down" + "Player")
+  theme.dart                       AppColors (rosa de marca #FE2C55), AppTitle ("Down" + "Player") y AppLogo (assets/icon/logo.png)
   models/social_network.dart       enum SocialNetwork: reconoce enlaces, colores, login, isCollectionUrl()
   models/media_info.dart           MediaInfo y BatchEntry desde el JSON de yt-dlp
   models/download.dart             DownloadOption (-> argumentos de yt-dlp), DownloadTask, HistoryEntry
@@ -59,6 +61,7 @@ lib/
   services/download_manager.dart   Cola (2 a la vez), progreso, guardar en galería, pasar al historial
   services/history_service.dart    Historial en SharedPreferences y miniaturas locales
   services/accounts_service.dart   Cuentas conectadas (Instagram/Facebook)
+  services/preferences_service.dart  Calidad preferida (0 = mejor, -1 = audio, 720 = hasta 720p)
   screens/home_screen.dart         Menú de 4 redes, menú lateral, barra Inicio/Historial, "Compartir -> DownPlayer"
   screens/download_screen.dart     Pegar enlace, tarjeta del video, Full HD / audio / lotes
   screens/batch_screen.dart        Cuadrícula de un perfil/canal/lista para descargar varios
@@ -67,6 +70,8 @@ lib/
   screens/login_screen.dart        WebView para iniciar sesión
   widgets/                         network_logo, thumbnail, task_tile, quality_sheet
   utils/format_utils.dart          formatCount (2.97M), formatDuration, formatDate, extractUrl
+assets/icon/                       app_icon.png (redondeado, 512), logo.png (256, dentro de la app),
+                                   foreground.png (solo el dibujo, ~60% del lienzo) y background.png (degradado azul oscuro)
 plataforma/android/                AndroidManifest.xml, MainActivity.kt, proguard-rules.pro, configurar_gradle.py
 ```
 
@@ -81,6 +86,10 @@ plataforma/android/                AndroidManifest.xml, MainActivity.kt, proguar
 - Audio: `-f ba/b -x --audio-format mp3 --audio-quality 0`.
 - TikTok: yt-dlp ya prefiere el formato sin marca de agua.
 
+**Calidades.** `MediaInfo.qualities` agrupa los formatos por el lado corto del video (1080x1920 es "1080p"), igual que el campo `res` de yt-dlp, y omite AV1. Por cada calidad elige el formato H.264 de más bitrate y estima el peso (`filesize`, `filesize_approx` o `tbr x duración`, más el mejor audio si el video viene sin sonido). `showQualitySheet` muestra todas las calidades con su peso y sus fps, marca "Tu preferida" (la más cercana por debajo a la última elección) y la guarda en `PreferencesService`. El botón grande "Elegir calidad y descargar" abre esa hoja. En lotes hay un desplegable: Mejor, hasta 1080, 720, 480 o 360, o solo audio.
+
+**Ícono.** El original (1254 px con fondo blanco) se recortó con Pillow. En Android 8+ es un ícono adaptable: `foreground.png` (dibujo con fondo transparente, porque el azul casi negro original se volvió transparente por brillo) sobre `background.png` (degradado de #081A4E a #00020E). La pantalla de arranque usa el color #030B24. Dentro de la app aparece en la barra superior, el menú lateral, "Acerca de" y el historial vacío.
+
 **Lotes.** TikTok: `https://www.tiktok.com/@usuario`. YouTube: `channel_url + /videos`, o el enlace de lista/canal pegado directamente (`isCollectionUrl`). Facebook e Instagram no tienen lotes.
 
 **Instagram y Facebook.** Muchos videos piden sesión. `LoginScreen` abre la página oficial en un WebView. `saveCookies` copia las cookies del `CookieManager` de Android a `filesDir/cookies/<dominio>.txt` (formato Netscape) solo si existe la cookie de sesión (`sessionid` o `c_user`). Si la cuenta está conectada, se pasa `--cookies` a yt-dlp. `friendlyError` marca `needsLogin` para mostrar el botón "Conectar cuenta".
@@ -93,11 +102,12 @@ plataforma/android/                AndroidManifest.xml, MainActivity.kt, proguar
 
 ## Estado actual
 
-- v1 escrita completa, **todavía sin compilar** en GitHub Actions ni probar en un celular.
+- Repositorio: https://github.com/vperea95/downplayer (rama `main`).
+- v1 compilada con éxito en Actions al primer intento (06/10/2026; el artifact con los 2 APK pesa unos 119 MB). Falta probarla en un celular.
+- v1.1: ícono propio en todo lado y selección de calidad con peso aproximado. Sin compilar todavía.
 
 ## Pendientes e ideas
 
 - Llave de firma fija (keystore en GitHub Secrets) para actualizar sin desinstalar ni perder el historial.
 - Descargas en segundo plano con un servicio en primer plano y una notificación de progreso (hoy siguen mientras Android no cierre la app).
 - Fotos y carruseles de TikTok e Instagram (hoy se toma solo el primer video).
-- Ícono definitivo de la app.

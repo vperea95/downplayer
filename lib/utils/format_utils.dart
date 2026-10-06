@@ -45,3 +45,13 @@ String? extractUrl(String text) {
   if (match == null) return null;
   return match.group(0)!.replaceFirst(RegExp(r'[).,;!?\]]+$'), '');
 }
+
+/// 48234567 -> "46 MB", 1288490188 -> "1.2 GB".
+String formatBytes(int? bytes) {
+  if (bytes == null || bytes <= 0) return '';
+  const mb = 1024 * 1024;
+  if (bytes >= 1024 * mb) return '${_trim(bytes / (1024 * mb))} GB';
+  if (bytes >= 10 * mb) return '${(bytes / mb).round()} MB';
+  if (bytes >= mb) return '${(bytes / mb).toStringAsFixed(1)} MB';
+  return '${(bytes / 1024).round()} KB';
+}

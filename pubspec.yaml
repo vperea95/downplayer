@@ -1,7 +1,7 @@
 name: downplayer
 description: Descarga videos y audio de TikTok, Facebook, Instagram y YouTube, sin publicidad.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.6.0
@@ -19,6 +19,31 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/logo.png
+
+# Ícono de la app. El workflow ejecuta: dart run flutter_launcher_icons
+# En Android 8+ es un ícono adaptable (dibujo + fondo) que cada marca recorta a su forma.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon/app_icon.png
+  adaptive_icon_background: assets/icon/background.png
+  adaptive_icon_foreground: assets/icon/foreground.png
+  min_sdk_android: 24
+
+# Pantalla de arranque con el ícono. El workflow ejecuta: dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#030B24"
+  image: assets/icon/foreground.png
+  android_12:
+    color: "#030B24"
+    image: assets/icon/foreground.png
+    icon_background_color: "#030B24"
+  ios: false
+  web: false

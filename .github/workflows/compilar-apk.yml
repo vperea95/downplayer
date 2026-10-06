@@ -42,6 +42,11 @@ jobs:
       - name: Instalar dependencias
         run: flutter pub get || flutter pub upgrade --major-versions
 
+      - name: Generar ícono y pantalla de arranque
+        run: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+
       - name: Compilar APK
         run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 

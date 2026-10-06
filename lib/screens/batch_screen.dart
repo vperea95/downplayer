@@ -6,6 +6,7 @@ import '../models/social_network.dart';
 import '../services/accounts_service.dart';
 import '../services/download_manager.dart';
 import '../services/engine.dart';
+import '../services/preferences_service.dart';
 import '../utils/format_utils.dart';
 import '../widgets/thumbnail.dart';
 
@@ -18,6 +19,7 @@ class BatchScreen extends StatefulWidget {
     required this.engine,
     required this.manager,
     required this.accounts,
+    required this.preferences,
     this.title,
   });
 
@@ -27,6 +29,7 @@ class BatchScreen extends StatefulWidget {
   final Engine engine;
   final DownloadManager manager;
   final AccountsService accounts;
+  final PreferencesService preferences;
 
   @override
   State<BatchScreen> createState() => _BatchScreenState();
@@ -36,12 +39,33 @@ class _BatchScreenState extends State<BatchScreen> {
   List<BatchEntry>? _entries;
   String? _error;
   final Set<String> _selected = {};
-  bool _audioOnly = false;
+  late DownloadOption _option = widget.preferences.preferredOption ?? const DownloadOption.video();
+
+  /// Calidades para los lotes: cada video baja en la elegida o, si no la tiene, en la más cercana por debajo.
+  static const _choices = [
+    DownloadOption.video(),
+    DownloadOption.video(maxHeight: 1080),
+    DownloadOption.video(maxHeight: 720),
+    DownloadOption.video(maxHeight: 480),
+    DownloadOption.video(maxHeight: 360),
+    DownloadOption.audio(),
+  ];
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  int _choiceIndex() {
+    final i = _choices.indexWhere((c) => c.isAudio == _option.isAudio && c.maxHeight == _option.maxHeight);
+    return i < 0 ? 0 : i;
+  }
+
+  String _choiceLabel(DownloadOption o) {
+    if (o.isAudio) return 'Solo audio MP3';
+    if (o.maxHeight == null) return 'Mejor calidad disponible';
+    return 'Hasta ${qualityName(o.maxHeight!)}';
   }
 
   Future<void> _load() async {
@@ -92,12 +116,13 @@ class _BatchScreenState extends State<BatchScreen> {
         title: entry.title,
         author: widget.title ?? '',
         thumbnail: entry.thumbnail,
-        option: _audioOnly ? const DownloadOption.audio() : const DownloadOption.video(),
+        option: _option,
       );
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${chosen.length} descargas en cola. Míralas en Historial.')),
     );
+    widget.preferences.rememberOption(_option);
     setState(_selected.clear);
   }
 
@@ -127,13 +152,26 @@ class _BatchScreenState extends State<BatchScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment(value: false, icon: Icon(Icons.movie_outlined), label: Text('Video')),
-                        ButtonSegment(value: true, icon: Icon(Icons.music_note), label: Text('Audio MP3')),
-                      ],
-                      selected: {_audioOnly},
-                      onSelectionChanged: (s) => setState(() => _audioOnly = s.first),
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Calidad',
+                        prefixIcon: Icon(Icons.high_quality),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: _choiceIndex(),
+                          isExpanded: true,
+                          items: [
+                            for (var i = 0; i < _choices.length; i++)
+                              DropdownMenuItem(value: i, child: Text(_choiceLabel(_choices[i]))),
+                          ],
+                          onChanged: (i) {
+                            if (i != null) setState(() => _option = _choices[i]);
+                          },
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     SizedBox(

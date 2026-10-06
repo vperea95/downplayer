@@ -11,7 +11,8 @@ class DownloadOption {
 
   final MediaKind kind;
 
-  /// Null = la mejor calidad disponible.
+  /// Calidad máxima contada por el lado corto (720, 1080…), igual que el campo
+  /// "res" de yt-dlp. Null = la mejor calidad disponible.
   final int? maxHeight;
 
   bool get isAudio => kind == MediaKind.audio;
@@ -37,7 +38,7 @@ class DownloadOption {
   }
 }
 
-/// 2160 -> "4K", 1080 -> "Full HD 1080p", 720 -> "HD 720p".
+/// 2160 -> "4K", 1080 -> "Full HD 1080p", 720 -> "HD 720p". Se cuenta por el lado corto.
 String qualityName(int height) {
   if (height >= 2160) return '4K';
   if (height >= 1440) return '2K 1440p';

@@ -6,6 +6,7 @@ import '../services/accounts_service.dart';
 import '../services/download_manager.dart';
 import '../services/engine.dart';
 import '../services/history_service.dart';
+import '../services/preferences_service.dart';
 import '../theme.dart';
 import '../utils/format_utils.dart';
 import '../widgets/network_logo.dart';
@@ -22,12 +23,14 @@ class HomeScreen extends StatefulWidget {
     required this.manager,
     required this.history,
     required this.accounts,
+    required this.preferences,
   });
 
   final Engine engine;
   final DownloadManager manager;
   final HistoryService history;
   final AccountsService accounts;
+  final PreferencesService preferences;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -71,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
           engine: widget.engine,
           manager: widget.manager,
           accounts: widget.accounts,
+          preferences: widget.preferences,
           initialUrl: initialUrl,
           onOpenHistory: () => setState(() => _tab = 1),
         ),
@@ -143,7 +147,14 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const AppTitle(),
+          titleSpacing: 0,
+          title: const Row(
+            children: [
+              AppLogo(size: 32),
+              SizedBox(width: 10),
+              AppTitle(),
+            ],
+          ),
           actions: [
             IconButton(
               tooltip: 'Abrir TikTok',
@@ -210,8 +221,14 @@ class _HomeScreenState extends State<HomeScreen> {
             return ListView(
               children: [
                 const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 20, 24, 4),
-                  child: AppTitle(),
+                  padding: EdgeInsets.fromLTRB(24, 20, 24, 8),
+                  child: Row(
+                    children: [
+                      AppLogo(size: 56),
+                      SizedBox(width: 14),
+                      AppTitle(),
+                    ],
+                  ),
                 ),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(24, 0, 24, 12),
@@ -254,7 +271,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     showAboutDialog(
                       context: context,
                       applicationName: 'DownPlayer',
-                      applicationVersion: '1.0.0',
+                      applicationVersion: '1.1.0',
+                      applicationIcon: const AppLogo(size: 56),
                       children: const [
                         Text(
                           'Descarga videos y audio de TikTok, Facebook, Instagram y YouTube, sin publicidad. '

@@ -5,6 +5,7 @@ import '../services/accounts_service.dart';
 import '../services/download_manager.dart';
 import '../services/engine.dart';
 import '../services/history_service.dart';
+import '../theme.dart';
 import '../utils/format_utils.dart';
 import '../widgets/network_logo.dart';
 import '../widgets/task_tile.dart';
@@ -295,7 +296,7 @@ class _EmptyHistory extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.download_for_offline_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
+            const Opacity(opacity: 0.85, child: AppLogo(size: 88)),
             const SizedBox(height: 12),
             const Text(
               'Aquí verás tus descargas.\nSe guardan en la galería, en las carpetas '

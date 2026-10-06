@@ -7,6 +7,7 @@ import '../models/social_network.dart';
 import '../services/accounts_service.dart';
 import '../services/download_manager.dart';
 import '../services/engine.dart';
+import '../services/preferences_service.dart';
 import '../utils/format_utils.dart';
 import '../widgets/network_logo.dart';
 import '../widgets/quality_sheet.dart';
@@ -23,6 +24,7 @@ class DownloadScreen extends StatefulWidget {
     required this.engine,
     required this.manager,
     required this.accounts,
+    required this.preferences,
     this.initialUrl,
     this.onOpenHistory,
   });
@@ -31,6 +33,7 @@ class DownloadScreen extends StatefulWidget {
   final Engine engine;
   final DownloadManager manager;
   final AccountsService accounts;
+  final PreferencesService preferences;
 
   /// Enlace que llegó con "Compartir": se analiza apenas abre la pantalla.
   final String? initialUrl;
@@ -157,8 +160,8 @@ class _DownloadScreenState extends State<DownloadScreen> {
   Future<void> _chooseQuality() async {
     final info = _info;
     if (info == null) return;
-    final option = await showQualitySheet(context, info);
-    if (option != null) await _download(option);
+    final option = await showQualitySheet(context, info, widget.preferences);
+    if (option != null && mounted) await _download(option);
   }
 
   void _openBatch(String url, String? title) {
@@ -172,6 +175,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
           engine: widget.engine,
           manager: widget.manager,
           accounts: widget.accounts,
+          preferences: widget.preferences,
         ),
       ),
     );
@@ -406,9 +410,9 @@ class _DownloadScreenState extends State<DownloadScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: FilledButton.icon(
-                onPressed: () => _download(const DownloadOption.video()),
+                onPressed: _chooseQuality,
                 icon: const Icon(Icons.download),
-                label: Text(best != null ? 'Descargar video · ${qualityName(best)}' : 'Descargar video'),
+                label: Text(best != null ? 'Elegir calidad y descargar (hasta ${qualityName(best)})' : 'Elegir calidad y descargar'),
               ),
             ),
           ListenableBuilder(

@@ -46,3 +46,21 @@ class AppTitle extends StatelessWidget {
     );
   }
 }
+
+/// Ícono de la app (assets/icon/logo.png).
+class AppLogo extends StatelessWidget {
+  const AppLogo({super.key, this.size = 32});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/icon/logo.png',
+      width: size,
+      height: size,
+      filterQuality: FilterQuality.medium,
+      semanticLabel: 'DownPlayer',
+    );
+  }
+}

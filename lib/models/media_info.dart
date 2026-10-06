@@ -11,7 +11,8 @@ class MediaInfo {
     required this.thumbnail,
     required this.duration,
     required this.viewCount,
-    required this.heights,
+    required this.qualities,
+    required this.audioBytes,
     required this.width,
     required this.height,
     required this.collectionUrl,
@@ -26,27 +27,62 @@ class MediaInfo {
   final double? duration;
   final int? viewCount;
 
-  /// Alturas de video disponibles (1080, 720, ...), de mayor a menor. Vacía si es solo audio.
-  final List<int> heights;
+  /// Calidades de video disponibles, de mayor a menor. Vacía si es solo audio.
+  final List<VideoQuality> qualities;
+
+  /// Peso aproximado del mejor audio (para estimar el MP3 y sumar al video).
+  final int? audioBytes;
   final int? width;
   final int? height;
 
   /// Perfil o canal del autor, para "Descarga por lotes". Null si la red no lo permite.
   final String? collectionUrl;
 
-  bool get hasVideo => heights.isNotEmpty || (height ?? 0) > 0;
-  int? get bestHeight => heights.isNotEmpty ? heights.first : height;
+  bool get hasVideo => qualities.isNotEmpty || (height ?? 0) > 0;
+
+  /// Calidad máxima, contada por el lado corto (un video vertical 1080x1920 es "1080p").
+  int? get bestHeight {
+    if (qualities.isNotEmpty) return qualities.first.p;
+    if (width != null && height != null) return width! < height! ? width : height;
+    return height;
+  }
+
   bool get isVertical => width != null && height != null && height! > width!;
 
   factory MediaInfo.fromJson(Map<String, dynamic> json, SocialNetwork network, String sourceUrl) {
-    final formats = (json['formats'] as List?) ?? const [];
-    final heights = <int>{};
+    final duration = _toDouble(json['duration']);
+    final formats = (json['formats'] as List?)?.whereType<Map>().toList() ?? const [];
+
+    // Mejor audio solo (para sumarlo a los videos que vienen sin sonido).
+    int? audioBytes;
     for (final f in formats) {
-      if (f is! Map) continue;
-      final vcodec = f['vcodec'];
-      final h = _toInt(f['height']);
-      if (h != null && h > 0 && vcodec != 'none') heights.add(h);
+      if (f['vcodec'] != 'none' || f['acodec'] == 'none' || f['acodec'] == null) continue;
+      final size = _sizeOf(f, duration);
+      if (size != null && (audioBytes == null || size > audioBytes)) audioBytes = size;
     }
+
+    // Por cada calidad se toma el formato que yt-dlp preferiría: H.264 primero, luego el de más bitrate.
+    final best = <int, Map>{};
+    for (final f in formats) {
+      final vcodec = '${f['vcodec'] ?? ''}';
+      if (vcodec == 'none' || vcodec.startsWith('av01')) continue;
+      final w = _toInt(f['width']);
+      final h = _toInt(f['height']);
+      if (h == null || h <= 0) continue;
+      final p = w != null && w > 0 && w < h ? w : h;
+      final current = best[p];
+      if (current == null || _betterFormat(f, current)) best[p] = f;
+    }
+    final audioSize = audioBytes;
+    final qualities = best.entries.map((e) {
+      final f = e.value;
+      var size = _sizeOf(f, duration);
+      final hasAudio = f['acodec'] != null && f['acodec'] != 'none';
+      if (size != null && !hasAudio && audioSize != null) size += audioSize;
+      final fps = _toDouble(f['fps']);
+      return VideoQuality(p: e.key, bytes: size, fps: fps?.round());
+    }).toList()
+      ..sort((a, b) => b.p.compareTo(a.p));
 
     final description = (json['description'] as String?)?.trim() ?? '';
     var title = (json['title'] as String?)?.trim() ?? '';
@@ -66,9 +102,10 @@ class MediaInfo {
       title: title,
       author: author,
       thumbnail: json['thumbnail'] as String? ?? _lastThumbnail(json['thumbnails']),
-      duration: _toDouble(json['duration']),
+      duration: duration,
       viewCount: _toInt(json['view_count']),
-      heights: heights.toList()..sort((a, b) => b.compareTo(a)),
+      qualities: qualities,
+      audioBytes: audioBytes,
       width: _toInt(json['width']),
       height: _toInt(json['height']),
       collectionUrl: _collectionUrl(json, network),
@@ -90,6 +127,15 @@ class MediaInfo {
         return null;
     }
   }
+}
+
+/// Una calidad de video: "p" es el lado corto (720, 1080…), con peso y fps aproximados.
+class VideoQuality {
+  const VideoQuality({required this.p, this.bytes, this.fps});
+
+  final int p;
+  final int? bytes;
+  final int? fps;
 }
 
 /// Un video dentro de un perfil, canal o lista (`yt-dlp -J --flat-playlist`).
@@ -131,6 +177,22 @@ class BatchEntry {
       viewCount: _toInt(json['view_count']),
     );
   }
+}
+
+bool _betterFormat(Map a, Map b) {
+  final aH264 = '${a['vcodec'] ?? ''}'.startsWith('avc');
+  final bH264 = '${b['vcodec'] ?? ''}'.startsWith('avc');
+  if (aH264 != bH264) return aH264;
+  return (_toDouble(a['tbr']) ?? 0) > (_toDouble(b['tbr']) ?? 0);
+}
+
+/// Peso en bytes: el exacto, el aproximado o bitrate x duración.
+int? _sizeOf(Map f, double? duration) {
+  final exact = _toInt(f['filesize']) ?? _toInt(f['filesize_approx']);
+  if (exact != null && exact > 0) return exact;
+  final tbr = _toDouble(f['tbr']);
+  if (tbr != null && duration != null) return (tbr * 1000 / 8 * duration).round();
+  return null;
 }
 
 int? _toInt(Object? v) => v is num ? v.toInt() : null;
