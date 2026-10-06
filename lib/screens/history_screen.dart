@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/strings.dart';
 import '../models/download.dart';
 import '../services/accounts_service.dart';
 import '../services/download_manager.dart';
@@ -45,15 +46,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _delete(HistoryEntry entry) async {
+    final s = S.of(context);
     final deleteFile = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('¿Eliminar?'),
+        title: Text(s.deleteQuestion),
         content: Text('"${entry.title}"'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Solo del historial')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Borrar archivo')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(s.cancel)),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(s.onlyFromHistory)),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(s.deleteFile)),
         ],
       ),
     );
@@ -62,7 +64,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       final ok = await widget.engine.deleteMedia(entry.uri);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo borrar el archivo. Bórralo desde la galería.')),
+          SnackBar(content: Text(s.couldNotDelete)),
         );
       }
     }
@@ -70,6 +72,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _showOptions(HistoryEntry entry) {
+    final s = S.of(context);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -79,7 +82,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.play_arrow),
-              title: const Text('Reproducir'),
+              title: Text(s.play),
               onTap: () {
                 Navigator.pop(context);
                 _play(entry);
@@ -87,7 +90,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.share),
-              title: const Text('Compartir'),
+              title: Text(s.share),
               onTap: () {
                 Navigator.pop(context);
                 widget.engine.share(entry.uri, entry.mime);
@@ -95,7 +98,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.open_in_new),
-              title: const Text('Abrir con otra app'),
+              title: Text(s.openWithApp),
               onTap: () {
                 Navigator.pop(context);
                 widget.engine.openWith(entry.uri, entry.mime);
@@ -104,7 +107,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             if (entry.sourceUrl.isNotEmpty)
               ListTile(
                 leading: const Icon(Icons.link),
-                title: Text('Ver en ${entry.network.label}'),
+                title: Text(s.viewOn(entry.network.label)),
                 onTap: () {
                   Navigator.pop(context);
                   widget.engine.openUrl(entry.sourceUrl);
@@ -112,7 +115,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ListTile(
               leading: const Icon(Icons.delete_outline),
-              title: const Text('Eliminar'),
+              title: Text(s.delete),
               onTap: () {
                 Navigator.pop(context);
                 _delete(entry);
@@ -129,6 +132,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return ListenableBuilder(
       listenable: Listenable.merge([widget.manager, widget.history]),
       builder: (context, _) {
+        final s = S.of(context);
         final tasks = widget.manager.tasks;
         final entries = widget.history.entries.where((e) {
           switch (_filter) {
@@ -148,7 +152,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return CustomScrollView(
           slivers: [
             if (tasks.isNotEmpty) ...[
-              _header(context, 'Descargando (${tasks.length})'),
+              _header(context, s.downloadingCount(tasks.length)),
               SliverList.builder(
                 itemCount: tasks.length,
                 itemBuilder: (context, i) {
@@ -166,7 +170,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 },
               ),
             ],
-            _header(context, 'Descargados'),
+            _header(context, s.downloaded),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -176,9 +180,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     for (final f in _Filter.values)
                       ChoiceChip(
                         label: Text(switch (f) {
-                          _Filter.all => 'Todos',
-                          _Filter.video => 'Videos',
-                          _Filter.audio => 'Audios',
+                          _Filter.all => s.filterAll,
+                          _Filter.video => s.filterVideos,
+                          _Filter.audio => s.filterAudios,
                         }),
                         selected: _filter == f,
                         onSelected: (_) => setState(() => _filter = f),
@@ -188,10 +192,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
             if (entries.isEmpty)
-              const SliverToBoxAdapter(
+              SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(child: Text('Nada por aquí todavía.')),
+                  padding: const EdgeInsets.all(32),
+                  child: Center(child: Text(s.nothingYet)),
                 ),
               )
             else
@@ -274,7 +278,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
             IconButton(
-              tooltip: 'Opciones',
+              tooltip: S.of(context).options,
               icon: const Icon(Icons.more_vert),
               onPressed: () => _showOptions(entry),
             ),
@@ -298,11 +302,7 @@ class _EmptyHistory extends StatelessWidget {
           children: [
             const Opacity(opacity: 0.85, child: AppLogo(size: 88)),
             const SizedBox(height: 12),
-            const Text(
-              'Aquí verás tus descargas.\nSe guardan en la galería, en las carpetas '
-              'Películas/DownPlayer y Música/DownPlayer.',
-              textAlign: TextAlign.center,
-            ),
+            Text(S.of(context).emptyHistory, textAlign: TextAlign.center),
           ],
         ),
       ),

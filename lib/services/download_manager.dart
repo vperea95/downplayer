@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../l10n/strings.dart';
 import '../models/download.dart';
 import '../models/social_network.dart';
 import 'accounts_service.dart';
@@ -156,7 +157,7 @@ class DownloadManager extends ChangeNotifier {
     } catch (e) {
       task
         ..state = TaskState.failed
-        ..error = 'Algo salió mal: $e';
+        ..error = S.current.somethingWrong('$e');
     }
     notifyListeners();
     _pump();

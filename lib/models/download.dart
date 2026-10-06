@@ -1,3 +1,4 @@
+import '../l10n/strings.dart';
 import 'social_network.dart';
 
 enum MediaKind { video, audio }
@@ -18,9 +19,9 @@ class DownloadOption {
   bool get isAudio => kind == MediaKind.audio;
 
   String get label {
-    if (isAudio) return 'Audio MP3';
-    if (maxHeight == null) return 'Video (mejor calidad)';
-    return 'Video ${qualityName(maxHeight!)}';
+    if (isAudio) return S.current.labelAudio;
+    if (maxHeight == null) return S.current.labelVideoBest;
+    return S.current.labelVideo(qualityName(maxHeight!));
   }
 
   /// Opciones para yt-dlp. Se prefiere H.264 + AAC en MP4 porque se reproduce en

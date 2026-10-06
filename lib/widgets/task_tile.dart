@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/strings.dart';
 import '../models/download.dart';
 import '../services/download_manager.dart';
 import '../utils/format_utils.dart';
@@ -17,29 +18,30 @@ class TaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final scheme = Theme.of(context).colorScheme;
     final failed = task.state == TaskState.failed;
 
     final String status;
     switch (task.state) {
       case TaskState.queued:
-        status = 'En espera…';
+        status = s.waiting;
       case TaskState.running:
         if (task.processing) {
-          status = task.option.isAudio ? 'Convirtiendo a MP3…' : 'Uniendo video y audio…';
+          status = task.option.isAudio ? s.convertingMp3 : s.merging;
         } else if (task.progress == null) {
-          status = 'Conectando…';
+          status = s.connecting;
         } else {
           final pct = (task.progress! * 100).toStringAsFixed(0);
-          final eta = task.etaSeconds != null && task.etaSeconds! > 0 ? ' · faltan ${formatDuration(task.etaSeconds)}' : '';
+          final eta = task.etaSeconds != null && task.etaSeconds! > 0 ? s.timeLeft(formatDuration(task.etaSeconds)) : '';
           status = '$pct%$eta';
         }
       case TaskState.saving:
-        status = 'Guardando en la galería…';
+        status = s.savingToGallery;
       case TaskState.failed:
-        status = task.error ?? 'Error';
+        status = task.error ?? s.error;
       case TaskState.canceled:
-        status = 'Cancelando…';
+        status = s.canceling;
     }
 
     final showBar = task.state == TaskState.running || task.state == TaskState.saving || task.state == TaskState.queued;
@@ -86,13 +88,13 @@ class TaskTile extends StatelessWidget {
                       TextButton.icon(
                         onPressed: () => manager.retry(task),
                         icon: const Icon(Icons.refresh),
-                        label: const Text('Reintentar'),
+                        label: Text(s.retry),
                       ),
                       if (task.needsLogin && onLogin != null)
                         TextButton.icon(
                           onPressed: onLogin,
                           icon: const Icon(Icons.login),
-                          label: const Text('Conectar cuenta'),
+                          label: Text(s.connectAccount),
                         ),
                     ],
                   ),
@@ -100,7 +102,7 @@ class TaskTile extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: failed ? 'Quitar' : 'Cancelar',
+            tooltip: failed ? s.remove : s.cancel,
             onPressed: task.state == TaskState.saving
                 ? null
                 : () => failed ? manager.dismiss(task) : manager.cancel(task),

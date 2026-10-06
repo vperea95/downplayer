@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/strings.dart';
 import '../models/download.dart';
 import '../models/media_info.dart';
 import '../models/social_network.dart';
@@ -78,7 +79,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
     final url = extractUrl(data?.text ?? '');
     if (!mounted) return;
     if (url == null) {
-      if (!onlyIfMatches) _snack('No hay ningún enlace copiado.');
+      if (!onlyIfMatches) _snack(S.of(context).noLinkCopied);
       return;
     }
     if (onlyIfMatches && !_network.matches(url)) return;
@@ -89,7 +90,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
     FocusScope.of(context).unfocus();
     final url = extractUrl(_controller.text.trim());
     if (url == null) {
-      _snack('Pega un enlace de ${_network.label}. Por ejemplo: ${_network.example}');
+      _snack(S.of(context).pasteLinkOf(_network.label, _network.example));
       return;
     }
     if (url != _controller.text) _controller.text = url;
@@ -98,7 +99,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
     final detected = SocialNetwork.detect(url);
     if (detected != null && detected != _network) {
       setState(() => _network = detected);
-      _snack('Ese enlace es de ${detected.label}. Lo abrimos como ${detected.label}.');
+      _snack(S.of(context).linkIsFrom(detected.label));
     }
 
     if (_network.isCollectionUrl(url)) {
@@ -107,7 +108,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
     }
 
     if (widget.engine.status == EngineStatus.preparing) {
-      _snack('El motor de descarga se está preparando. Espera unos segundos.');
+      _snack(S.of(context).enginePreparingWait);
     }
 
     setState(() {
@@ -141,14 +142,15 @@ class _DownloadScreenState extends State<DownloadScreen> {
       thumbnail: info.thumbnail,
       option: option,
     );
+    final s = S.of(context);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
-        content: Text('Descargando ${option.label.toLowerCase()}…'),
+        content: Text(s.downloading(option.label)),
         action: widget.onOpenHistory == null
             ? null
             : SnackBarAction(
-                label: 'Ver',
+                label: s.view,
                 onPressed: () {
                   Navigator.popUntil(context, (route) => route.isFirst);
                   widget.onOpenHistory!();
@@ -185,7 +187,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
     final ok = await LoginScreen.open(context, _network, widget.accounts);
     if (!mounted) return;
     if (ok) {
-      _snack('Cuenta de ${_network.label} conectada.');
+      _snack(S.of(context).accountConnected(_network.label));
       _analyze();
     }
   }
@@ -198,6 +200,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -210,7 +213,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Abrir ${_network.label}',
+            tooltip: s.openNetwork(_network.label),
             icon: const Icon(Icons.open_in_new),
             onPressed: () => widget.engine.openUrl(_network.appUrl),
           ),
@@ -233,6 +236,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
   }
 
   Widget _linkBox() {
+    final s = S.of(context);
     final hasText = _controller.text.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -247,11 +251,11 @@ class _DownloadScreenState extends State<DownloadScreen> {
                 textInputAction: TextInputAction.go,
                 onSubmitted: (_) => _analyze(),
                 decoration: InputDecoration(
-                  hintText: 'Pega el enlace de ${_network.label}',
+                  hintText: s.pasteHint(_network.label),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   suffixIcon: hasText
                       ? IconButton(
-                          tooltip: 'Borrar',
+                          tooltip: s.clear,
                           icon: const Icon(Icons.cancel),
                           onPressed: () {
                             _controller.clear();
@@ -262,7 +266,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
                           },
                         )
                       : IconButton(
-                          tooltip: 'Pegar',
+                          tooltip: s.paste,
                           icon: const Icon(Icons.content_paste),
                           onPressed: () => _pasteFromClipboard(),
                         ),
@@ -274,7 +278,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
               height: 56,
               child: FilledButton(
                 onPressed: _loading ? null : _analyze,
-                child: const Text('Descargar'),
+                child: Text(s.download),
               ),
             ),
           ],
@@ -285,7 +289,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
             child: TextButton.icon(
               onPressed: () => _pasteFromClipboard(),
               icon: const Icon(Icons.content_paste, size: 18),
-              label: const Text('Pegar enlace copiado'),
+              label: Text(s.pasteCopied),
             ),
           ),
       ],
@@ -293,14 +297,14 @@ class _DownloadScreenState extends State<DownloadScreen> {
   }
 
   Widget _loadingCard() {
-    return const Card(
+    return Card(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
         child: Column(
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Buscando el video…'),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(S.of(context).searchingVideo),
           ],
         ),
       ),
@@ -308,6 +312,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
   }
 
   Widget _errorCard() {
+    final s = S.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Card(
       color: scheme.errorContainer,
@@ -320,8 +325,10 @@ class _DownloadScreenState extends State<DownloadScreen> {
               children: [
                 Icon(Icons.error_outline, color: scheme.onErrorContainer),
                 const SizedBox(width: 8),
-                Text('No se pudo obtener el video',
-                    style: TextStyle(fontWeight: FontWeight.w700, color: scheme.onErrorContainer)),
+                Expanded(
+                  child: Text(s.couldNotGetVideo,
+                      style: TextStyle(fontWeight: FontWeight.w700, color: scheme.onErrorContainer)),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -333,13 +340,13 @@ class _DownloadScreenState extends State<DownloadScreen> {
                 FilledButton.tonalIcon(
                   onPressed: _analyze,
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Reintentar'),
+                  label: Text(s.retry),
                 ),
                 if (_network.supportsLogin && (_errorNeedsLogin || !widget.accounts.isConnected(_network)))
                   OutlinedButton.icon(
                     onPressed: _login,
                     icon: const Icon(Icons.login),
-                    label: Text('Conectar ${_network.label}'),
+                    label: Text(s.connectNetwork(_network.label)),
                   ),
               ],
             ),
@@ -350,15 +357,16 @@ class _DownloadScreenState extends State<DownloadScreen> {
   }
 
   Widget _mediaCard(MediaInfo info) {
+    final s = S.of(context);
     final theme = Theme.of(context);
     final best = info.bestHeight;
     final videoLabel = best == null
-        ? 'Obtener video'
+        ? s.getVideo
         : best >= 1080
-            ? 'Obtener Full HD'
+            ? s.getFullHd
             : best >= 720
-                ? 'Obtener HD'
-                : 'Obtener video';
+                ? s.getHd
+                : s.getVideo;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -399,9 +407,9 @@ class _DownloadScreenState extends State<DownloadScreen> {
               children: [
                 if (info.hasVideo)
                   _action(Icons.hd_outlined, videoLabel, _chooseQuality),
-                _action(Icons.music_note_outlined, 'Obtener audio', () => _download(const DownloadOption.audio())),
+                _action(Icons.music_note_outlined, s.getAudio, () => _download(const DownloadOption.audio())),
                 if (info.collectionUrl != null)
-                  _action(Icons.collections_outlined, 'Descarga por lotes',
+                  _action(Icons.collections_outlined, s.batchDownload,
                       () => _openBatch(info.collectionUrl!, info.author)),
               ],
             ),
@@ -412,7 +420,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
               child: FilledButton.icon(
                 onPressed: _chooseQuality,
                 icon: const Icon(Icons.download),
-                label: Text(best != null ? 'Elegir calidad y descargar (hasta ${qualityName(best)})' : 'Elegir calidad y descargar'),
+                label: Text(best != null ? s.chooseQualityUpTo(qualityName(best)) : s.chooseQualityAndDownload),
               ),
             ),
           ListenableBuilder(
@@ -473,19 +481,16 @@ class _DownloadScreenState extends State<DownloadScreen> {
   }
 
   Widget _howTo() {
+    final s = S.of(context);
     final theme = Theme.of(context);
-    final steps = [
-      'Abre ${_network.label} y busca el video.',
-      'Toca "Compartir" y luego "Copiar enlace".',
-      'Vuelve aquí: el enlace se pega solo. Toca "Descargar".',
-    ];
+    final steps = [s.howStep1(_network.label), s.howStep2, s.howStep3];
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Cómo descargar', style: theme.textTheme.titleMedium),
+            Text(s.howTo, style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
             for (var i = 0; i < steps.length; i++)
               Padding(
@@ -501,13 +506,13 @@ class _DownloadScreenState extends State<DownloadScreen> {
               ),
             const SizedBox(height: 4),
             Text(
-              'También puedes tocar "Compartir" en ${_network.label} y elegir DownPlayer.',
+              s.shareTip(_network.label),
               style: theme.textTheme.bodySmall,
             ),
             if (_network == SocialNetwork.youtube || _network == SocialNetwork.tiktok) ...[
               const SizedBox(height: 4),
               Text(
-                'Si pegas el enlace de un perfil, canal o lista, verás todos sus videos para descargarlos juntos.',
+                s.collectionTip,
                 style: theme.textTheme.bodySmall,
               ),
             ],

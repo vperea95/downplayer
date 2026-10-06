@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:ui' show PlatformDispatcher;
 
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
+import 'l10n/strings.dart';
 import 'screens/home_screen.dart';
 import 'services/accounts_service.dart';
 import 'services/download_manager.dart';
@@ -17,6 +21,9 @@ Future<void> main() async {
   final preferences = PreferencesService();
   await Future.wait([history.load(), accounts.load(), preferences.load()]);
   final manager = DownloadManager(engine: engine, history: history, accounts: accounts);
+
+  // Idioma para los textos que se usan antes de que cargue la interfaz.
+  S.current = S.forLocale(preferences.locale ?? PlatformDispatcher.instance.locale);
 
   runApp(DownPlayerApp(
     engine: engine,
@@ -48,17 +55,30 @@ class DownPlayerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'DownPlayer',
-      debugShowCheckedModeBanner: false,
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      home: HomeScreen(
-        engine: engine,
-        manager: manager,
-        history: history,
-        accounts: accounts,
-        preferences: preferences,
+    // Apariencia e idioma siguen al sistema, salvo que el usuario elija otro en el menú.
+    return ListenableBuilder(
+      listenable: preferences,
+      builder: (context, _) => MaterialApp(
+        title: 'DownPlayer',
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(Brightness.light),
+        darkTheme: buildTheme(Brightness.dark),
+        themeMode: preferences.themeMode,
+        locale: preferences.locale,
+        supportedLocales: S.supportedLocales,
+        localizationsDelegates: const [
+          S.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: HomeScreen(
+          engine: engine,
+          manager: manager,
+          history: history,
+          accounts: accounts,
+          preferences: preferences,
+        ),
       ),
     );
   }

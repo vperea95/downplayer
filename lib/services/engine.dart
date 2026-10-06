@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../l10n/strings.dart';
 import '../models/media_info.dart';
 import '../models/social_network.dart';
 
@@ -52,7 +53,7 @@ class Engine extends ChangeNotifier {
   Future<void> init() async {
     if (!isSupported) {
       status = EngineStatus.failed;
-      initError = 'DownPlayer solo funciona en Android.';
+      initError = S.current.androidOnly;
       notifyListeners();
       return;
     }
@@ -103,7 +104,7 @@ class Engine extends ChangeNotifier {
       // Por ejemplo, un carrusel de Instagram: se toma el primer video.
       final entries = (json['entries'] as List?)?.whereType<Map<String, dynamic>>().toList() ?? const [];
       final firstVideo = entries.where((e) => e['vcodec'] != 'none').firstOrNull ?? entries.firstOrNull;
-      if (firstVideo == null) throw const EngineException('Esa publicación no tiene videos.');
+      if (firstVideo == null) throw EngineException(S.current.postHasNoVideos);
       return MediaInfo.fromJson({...json, ...firstVideo}, network, url);
     }
     return MediaInfo.fromJson(json, network, url);
@@ -137,7 +138,7 @@ class Engine extends ChangeNotifier {
         'args': args,
         'cookies': cookies,
       });
-      if (path == null) throw const EngineException('No se pudo descargar el archivo.');
+      if (path == null) throw EngineException(S.current.downloadFileFailed);
       return path;
     } finally {
       _progressListeners.remove(id);
@@ -151,20 +152,20 @@ class Engine extends ChangeNotifier {
     if (await _invoke<bool>('needsStoragePermission') ?? false) {
       final granted = await _invoke<bool>('requestStoragePermission') ?? false;
       if (!granted) {
-        throw const EngineException('Sin permiso de almacenamiento no se puede guardar en la galería.');
+        throw EngineException(S.current.storagePermissionNeeded);
       }
     }
     final uri = await _invoke<String>('saveToGallery', {'path': path, 'audio': audio});
-    if (uri == null) throw const EngineException('No se pudo guardar en la galería.');
+    if (uri == null) throw EngineException(S.current.saveFailed);
     return uri;
   }
 
   Future<bool> deleteMedia(String uri) async => await _invoke<bool>('deleteMedia', {'uri': uri}) ?? false;
   Future<bool> mediaExists(String uri) async => await _invoke<bool>('mediaExists', {'uri': uri}) ?? false;
   Future<bool> share(String uri, String mime) async =>
-      await _invoke<bool>('share', {'uri': uri, 'mime': mime}) ?? false;
+      await _invoke<bool>('share', {'uri': uri, 'mime': mime, 'title': S.current.share}) ?? false;
   Future<bool> openWith(String uri, String mime) async =>
-      await _invoke<bool>('openWith', {'uri': uri, 'mime': mime}) ?? false;
+      await _invoke<bool>('openWith', {'uri': uri, 'mime': mime, 'title': S.current.openWithTitle}) ?? false;
   Future<bool> openUrl(String url) async => await _invoke<bool>('openUrl', {'url': url}) ?? false;
 
   /// Copia la sesión del WebView a un archivo que yt-dlp entiende. True si la sesión está abierta.
@@ -206,29 +207,30 @@ class Engine extends ChangeNotifier {
 
   Map<String, dynamic> _decodeJson(String? out) {
     if (out == null || out.trim().isEmpty) {
-      throw const EngineException('No se encontró información del video.');
+      throw EngineException(S.current.noVideoInfo);
     }
     // Si yt-dlp imprime avisos antes del JSON, se toma desde la primera llave.
     final start = out.indexOf('{');
     try {
       return jsonDecode(start > 0 ? out.substring(start) : out) as Map<String, dynamic>;
     } catch (_) {
-      throw const EngineException('No se pudo leer la información del video.');
+      throw EngineException(S.current.cannotReadInfo);
     }
   }
 
   Future<T?> _invoke<T>(String method, [Map<String, dynamic>? args]) async {
-    if (!isSupported) throw const EngineException('DownPlayer solo funciona en Android.');
+    if (!isSupported) throw EngineException(S.current.androidOnly);
     try {
       return await _channel.invokeMethod<T>(method, args);
     } on PlatformException catch (e) {
-      if (e.code == 'canceled') throw const EngineException('Descarga cancelada.', canceled: true);
+      if (e.code == 'canceled') throw EngineException(S.current.downloadCanceled, canceled: true);
       throw friendlyError(e.message ?? '');
     }
   }
 
   /// Convierte los errores de yt-dlp en mensajes que cualquiera entiende.
   static EngineException friendlyError(String raw) {
+    final t = S.current;
     final text = raw.toLowerCase();
     bool has(String s) => text.contains(s);
 
@@ -239,31 +241,25 @@ class Engine extends ChangeNotifier {
         has('cookies-from-browser') ||
         has('log in') ||
         has('login_required')) {
-      return const EngineException(
-        'La red pidió iniciar sesión para ver este video. Conecta tu cuenta desde el menú e intenta de nuevo.',
-        needsLogin: true,
-      );
+      return EngineException(t.errLogin, needsLogin: true);
     }
     if (has('sign in to confirm') || has('not a bot')) {
-      return const EngineException(
-        'YouTube pidió verificar que no eres un robot. Espera unos minutos, '
-        'actualiza el motor desde el menú y vuelve a intentar.',
-      );
+      return EngineException(t.errBot);
     }
     if (has('private video') || has('is private') || has('this video is private')) {
-      return const EngineException('El video es privado. Solo se pueden descargar videos públicos.');
+      return EngineException(t.errPrivate);
     }
     if (has('unsupported url')) {
-      return const EngineException('Ese enlace no es de un video que se pueda descargar. Revisa el enlace.');
+      return EngineException(t.errUnsupported);
     }
     if (has('video unavailable') || has('http error 404') || has('not found') || has('has been removed')) {
-      return const EngineException('No se encontró el video. Puede que lo hayan borrado o que el enlace esté mal.');
+      return EngineException(t.errNotFound);
     }
     if (has('age') && has('restrict') || has('inappropriate for some users')) {
-      return const EngineException('El video tiene restricción de edad y no se puede descargar sin cuenta.');
+      return EngineException(t.errAge);
     }
     if (has('live event') || has('is live') || has('premieres in')) {
-      return const EngineException('Las transmisiones en vivo no se pueden descargar.');
+      return EngineException(t.errLive);
     }
     if (has('unable to download') ||
         has('failed to resolve') ||
@@ -271,10 +267,10 @@ class Engine extends ChangeNotifier {
         has('timed out') ||
         has('connection') ||
         has('temporary failure')) {
-      return const EngineException('No hay conexión o la red no respondió. Revisa tu internet e intenta de nuevo.');
+      return EngineException(t.errNetwork);
     }
     if (has('no space left')) {
-      return const EngineException('No hay espacio suficiente en el celular.');
+      return EngineException(t.errNoSpace);
     }
 
     // Último recurso: la línea "ERROR:" de yt-dlp, sin el prefijo técnico.
@@ -283,6 +279,6 @@ class Engine extends ChangeNotifier {
         .map((l) => l.trim())
         .lastWhere((l) => l.startsWith('ERROR:'), orElse: () => raw.trim());
     final cleaned = line.replaceFirst('ERROR:', '').replaceFirst(RegExp(r'^\s*\[[^\]]+\]\s*[^:]*:\s*'), '').trim();
-    return EngineException(cleaned.isEmpty ? 'Algo salió mal. Intenta de nuevo.' : 'No se pudo descargar: $cleaned');
+    return EngineException(cleaned.isEmpty ? t.errGeneric : t.errWithDetail(cleaned));
   }
 }

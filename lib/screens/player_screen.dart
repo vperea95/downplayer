@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../l10n/strings.dart';
 import '../models/download.dart';
 import '../services/engine.dart';
 import '../utils/format_utils.dart';
@@ -42,7 +43,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _scheduleHide();
     }).catchError((Object e) {
       if (!mounted) return;
-      setState(() => _error = 'No se pudo abrir el archivo. Puede que lo hayan borrado de la galería.');
+      setState(() => _error = S.of(context).cannotOpenFile);
     });
   }
 
@@ -90,6 +91,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final entry = widget.entry;
     return Scaffold(
       backgroundColor: Colors.black,
@@ -100,12 +102,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
         title: Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
-            tooltip: 'Compartir',
+            tooltip: s.share,
             icon: const Icon(Icons.share),
             onPressed: () => widget.engine.share(entry.uri, entry.mime),
           ),
           IconButton(
-            tooltip: 'Abrir con otra app',
+            tooltip: s.openWithApp,
             icon: const Icon(Icons.open_in_new),
             onPressed: () => widget.engine.openWith(entry.uri, entry.mime),
           ),

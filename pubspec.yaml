@@ -1,13 +1,15 @@
 name: downplayer
 description: Descarga videos y audio de TikTok, Facebook, Instagram y YouTube, sin publicidad.
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: ^3.6.0
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   http: ^1.2.2
   shared_preferences: ^2.3.3
@@ -38,12 +40,16 @@ flutter_launcher_icons:
   min_sdk_android: 24
 
 # Pantalla de arranque con el ícono. El workflow ejecuta: dart run flutter_native_splash:create
+# Abajo muestra la firma "from Vixago" (assets/icon/branding.png).
 flutter_native_splash:
   color: "#030B24"
   image: assets/icon/foreground.png
+  branding: assets/icon/branding.png
+  branding_mode: bottom
   android_12:
     color: "#030B24"
     image: assets/icon/foreground.png
     icon_background_color: "#030B24"
+    branding: assets/icon/branding.png
   ios: false
   web: false

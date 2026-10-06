@@ -1,3 +1,5 @@
+import '../l10n/strings.dart';
+
 /// 2970000 -> "2.97M", 15300 -> "15.3K".
 String formatCount(int? value) {
   if (value == null) return '';
@@ -24,8 +26,9 @@ String formatDuration(num? seconds) {
 
 String formatPosition(Duration d) => formatDuration(d.inMilliseconds / 1000);
 
-/// Fecha corta: "hoy 3:20 p. m.", "ayer", "12/03/2026".
+/// Fecha corta: "Hoy 3:20 p. m.", "Ayer", "12/03/2026" (en inglés "Today 3:20 PM", "03/12/2026").
 String formatDate(DateTime date) {
+  final t = S.current;
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final day = DateTime(date.year, date.month, date.day);
@@ -33,10 +36,12 @@ String formatDate(DateTime date) {
   if (diff == 0) {
     final hour = date.hour % 12 == 0 ? 12 : date.hour % 12;
     final minute = date.minute.toString().padLeft(2, '0');
-    return 'Hoy $hour:$minute ${date.hour < 12 ? 'a. m.' : 'p. m.'}';
+    return '${t.today} $hour:$minute ${date.hour < 12 ? t.am : t.pm}';
   }
-  if (diff == 1) return 'Ayer';
-  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  if (diff == 1) return t.yesterday;
+  final day2 = date.day.toString().padLeft(2, '0');
+  final month2 = date.month.toString().padLeft(2, '0');
+  return t.isSpanish ? '$day2/$month2/${date.year}' : '$month2/$day2/${date.year}';
 }
 
 /// Saca el primer enlace de un texto ("Mira este video https://vt.tiktok.com/xyz/ #fyp").

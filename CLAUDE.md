@@ -1,6 +1,6 @@
 # DownPlayer — contexto del proyecto
 
-App móvil en Flutter para descargar videos y audio (MP3) de TikTok, Facebook, Instagram y YouTube, sin publicidad. Inspirada en AhaTik. Solo Android (iOS no aplica: yt-dlp no puede correr dentro de una app de iOS).
+App móvil en Flutter para descargar videos y audio (MP3) de TikTok, Facebook, Instagram y YouTube, sin publicidad. Inspirada en AhaTik. **Firma: la app es "por Vixago"** (desarrollador/marca). Solo Android (iOS no aplica: yt-dlp no puede correr dentro de una app de iOS).
 
 Se construyó con la misma forma de trabajo que Radio Colombia (`C:\Users\ANDRES\Downloads\radio_colombia\radio_colombia`).
 
@@ -46,13 +46,15 @@ Notas:
 - `video_player`: reproductor interno (abre los `content://` de la galería con `VideoPlayerController.contentUri`).
 - `webview_flutter`: inicio de sesión opcional en Instagram y Facebook.
 - `flutter_launcher_icons` y `flutter_native_splash` (dev): ícono y pantalla de arranque, generados en el workflow.
+- `flutter_localizations` (SDK): traduce los textos propios de Material (botones del sistema, diálogos, etc.).
 - Estado con `ChangeNotifier` + `ListenableBuilder` (sin provider ni riverpod). Las dependencias se pasan por constructor desde `main.dart`.
 
 ## Estructura
 
 ```
 lib/
-  main.dart                        Crea Engine, HistoryService, AccountsService y DownloadManager; engine.init() después de runApp
+  main.dart                        Crea los servicios; MaterialApp dentro de ListenableBuilder(preferences) para themeMode y locale; engine.init() después de runApp
+  l10n/strings.dart                Clase S con TODOS los textos en español e inglés (_t('es', 'en'))
   theme.dart                       AppColors (rosa de marca #FE2C55), AppTitle ("Down" + "Player") y AppLogo (assets/icon/logo.png)
   models/social_network.dart       enum SocialNetwork: reconoce enlaces, colores, login, isCollectionUrl()
   models/media_info.dart           MediaInfo y BatchEntry desde el JSON de yt-dlp
@@ -61,7 +63,7 @@ lib/
   services/download_manager.dart   Cola (2 a la vez), progreso, guardar en galería, pasar al historial
   services/history_service.dart    Historial en SharedPreferences y miniaturas locales
   services/accounts_service.dart   Cuentas conectadas (Instagram/Facebook)
-  services/preferences_service.dart  Calidad preferida (0 = mejor, -1 = audio, 720 = hasta 720p)
+  services/preferences_service.dart  Calidad preferida (0 = mejor, -1 = audio, 720 = hasta 720p), apariencia (ThemeMode) e idioma (null = sistema)
   screens/home_screen.dart         Menú de 4 redes, menú lateral, barra Inicio/Historial, "Compartir -> DownPlayer"
   screens/download_screen.dart     Pegar enlace, tarjeta del video, Full HD / audio / lotes
   screens/batch_screen.dart        Cuadrícula de un perfil/canal/lista para descargar varios
@@ -71,7 +73,8 @@ lib/
   widgets/                         network_logo, thumbnail, task_tile, quality_sheet
   utils/format_utils.dart          formatCount (2.97M), formatDuration, formatDate, extractUrl
 assets/icon/                       app_icon.png (redondeado, 512), logo.png (256, dentro de la app),
-                                   foreground.png (solo el dibujo, ~60% del lienzo) y background.png (degradado azul oscuro)
+                                   foreground.png (solo el dibujo, ~60% del lienzo), background.png (degradado azul oscuro)
+                                   y branding.png ("from Vixago", 800x320, abajo en la pantalla de arranque)
 plataforma/android/                AndroidManifest.xml, MainActivity.kt, proguard-rules.pro, configurar_gradle.py
 ```
 
@@ -90,6 +93,12 @@ plataforma/android/                AndroidManifest.xml, MainActivity.kt, proguar
 
 **Ícono.** El original (1254 px con fondo blanco) se recortó con Pillow. En Android 8+ es un ícono adaptable: `foreground.png` (dibujo con fondo transparente, porque el azul casi negro original se volvió transparente por brillo) sobre `background.png` (degradado de #081A4E a #00020E). La pantalla de arranque usa el color #030B24. Dentro de la app aparece en la barra superior, el menú lateral, "Acerca de" y el historial vacío.
 
+**Idioma.** Todos los textos visibles están en `lib/l10n/strings.dart` (clase `S`), con español e inglés juntos: `String get cancel => _t('Cancelar', 'Cancel');`. **Regla: no escribir textos fijos en las pantallas; agregarlos siempre a `S` en los dos idiomas.** En widgets se usa `S.of(context).x` (se redibuja si cambia el idioma); en servicios y modelos sin contexto, `S.current.x` (lo actualiza el delegate al cargar el idioma, y `main()` lo inicializa con el idioma del sistema). `supportedLocales` es `[en, es]`: el primero es el de respaldo, así que un celular en español ve español y en cualquier otro idioma ve inglés. El menú lateral tiene "Idioma": Automático (del sistema, por defecto), Español o English. Los títulos de los selectores nativos de Android ("Compartir", "Abrir con") se pasan desde Dart con el argumento `title`. Para agregar otro idioma: cambiar `_t` por un switch por idioma y sumar el `Locale` a `supportedLocales`.
+
+**Apariencia.** `MaterialApp` tiene `theme` (claro), `darkTheme` (oscuro) y `themeMode` desde `PreferencesService`, que por defecto es `ThemeMode.system` (sigue al celular). El menú lateral tiene "Apariencia": Predeterminado del sistema, Claro u Oscuro. El reproductor siempre es negro.
+
+**Firma Vixago.** Aparece en el menú lateral ("por Vixago" bajo el nombre y "DownPlayer 1.2.0 · por Vixago" al final), en "Acerca de" (`applicationLegalese: © 2026 Vixago` y "Desarrollada por Vixago") y en la pantalla de arranque ("from Vixago", en Android 12+ también). La llave con la que se firma el APK sigue siendo la debug de cada compilación (ver pendientes).
+
 **Lotes.** TikTok: `https://www.tiktok.com/@usuario`. YouTube: `channel_url + /videos`, o el enlace de lista/canal pegado directamente (`isCollectionUrl`). Facebook e Instagram no tienen lotes.
 
 **Instagram y Facebook.** Muchos videos piden sesión. `LoginScreen` abre la página oficial en un WebView. `saveCookies` copia las cookies del `CookieManager` de Android a `filesDir/cookies/<dominio>.txt` (formato Netscape) solo si existe la cookie de sesión (`sessionid` o `c_user`). Si la cuenta está conectada, se pasa `--cookies` a yt-dlp. `friendlyError` marca `needsLogin` para mostrar el botón "Conectar cuenta".
@@ -104,10 +113,11 @@ plataforma/android/                AndroidManifest.xml, MainActivity.kt, proguar
 
 - Repositorio: https://github.com/vperea95/downplayer (rama `main`).
 - v1 compilada con éxito en Actions al primer intento (06/10/2026; el artifact con los 2 APK pesa unos 119 MB). Falta probarla en un celular.
-- v1.1: ícono propio en todo lado y selección de calidad con peso aproximado. Sin compilar todavía.
+- v1.1: ícono propio en todo lado y selección de calidad con peso aproximado. Compilada con éxito en Actions (06/10/2026). Falta probarla en un celular.
+- v1.2: idioma del sistema (español/inglés), apariencia del sistema con opción Claro/Oscuro, firma "por Vixago".
 
 ## Pendientes e ideas
 
-- Llave de firma fija (keystore en GitHub Secrets) para actualizar sin desinstalar ni perder el historial.
+- Llave de firma fija a nombre de Vixago (keystore en GitHub Secrets) para actualizar sin desinstalar ni perder el historial.
 - Descargas en segundo plano con un servicio en primer plano y una notificación de progreso (hoy siguen mientras Android no cierre la app).
 - Fotos y carruseles de TikTok e Instagram (hoy se toma solo el primer video).

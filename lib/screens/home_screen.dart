@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/strings.dart';
 import '../models/download.dart';
 import '../models/social_network.dart';
 import '../services/accounts_service.dart';
@@ -51,14 +52,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openShared(String text) {
+    final s = S.of(context);
     final url = extractUrl(text);
     if (url == null) {
-      _snack('Lo que compartiste no tiene un enlace.');
+      _snack(s.sharedNoLink);
       return;
     }
     final network = SocialNetwork.detect(url);
     if (network == null) {
-      _snack('Ese enlace no es de TikTok, Facebook, Instagram ni YouTube.');
+      _snack(s.sharedUnsupported);
       return;
     }
     Navigator.popUntil(context, (route) => route.isFirst);
@@ -84,12 +86,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onCompleted(HistoryEntry entry) {
     if (!mounted) return;
+    final s = S.of(context);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
-        content: Text('Guardado en la galería: ${entry.title}', maxLines: 2, overflow: TextOverflow.ellipsis),
+        content: Text(s.savedToGallery(entry.title), maxLines: 2, overflow: TextOverflow.ellipsis),
         action: SnackBarAction(
-          label: 'Ver',
+          label: s.view,
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => PlayerScreen(entry: entry, engine: widget.engine)),
@@ -105,29 +108,31 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _updateEngine() async {
+    final s = S.of(context);
     Navigator.pop(context); // cierra el menú lateral
-    _snack('Buscando la versión más reciente del motor…');
+    _snack(s.engineChecking);
     try {
       final updated = await widget.engine.update();
-      _snack(updated
-          ? 'Motor actualizado a la versión ${widget.engine.version ?? ''}.'
-          : 'El motor ya está en la versión más reciente.');
+      if (!mounted) return;
+      _snack(updated ? s.engineUpdated(widget.engine.version ?? '') : s.engineUpToDate);
     } on EngineException catch (e) {
-      _snack('No se pudo actualizar: ${e.message}');
+      if (!mounted) return;
+      _snack(s.engineUpdateFailed(e.message));
     }
   }
 
   Future<void> _toggleAccount(SocialNetwork network) async {
+    final s = S.of(context);
     Navigator.pop(context);
     if (widget.accounts.isConnected(network)) {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('¿Desconectar ${network.label}?'),
-          content: const Text('Algunos videos pueden dejar de descargarse.'),
+          title: Text(s.disconnectTitle(network.label)),
+          content: Text(s.disconnectBody),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Desconectar')),
+            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(s.cancel)),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(s.disconnect)),
           ],
         ),
       );
@@ -135,11 +140,69 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     final ok = await LoginScreen.open(context, network, widget.accounts);
-    if (ok && mounted) _snack('Cuenta de ${network.label} conectada.');
+    if (ok && mounted) _snack(s.accountConnected(network.label));
+  }
+
+  /// Diálogo con opciones; la elegida lleva un check.
+  Future<T?> _pick<T>(String title, List<(T, String)> options, T current) {
+    return showDialog<T>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(title),
+        children: [
+          for (final (value, label) in options)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, value),
+              child: Row(
+                children: [
+                  Expanded(child: Text(label)),
+                  if (value == current) Icon(Icons.check, color: Theme.of(context).colorScheme.primary),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _themeLabel(S s, ThemeMode mode) => switch (mode) {
+        ThemeMode.system => s.themeSystem,
+        ThemeMode.light => s.themeLight,
+        ThemeMode.dark => s.themeDark,
+      };
+
+  String _languageLabel(S s, String? code) => switch (code) {
+        'es' => 'Español',
+        'en' => 'English',
+        _ => s.languageSystem,
+      };
+
+  Future<void> _chooseTheme() async {
+    final s = S.of(context);
+    final prefs = widget.preferences;
+    final mode = await _pick<ThemeMode>(
+      s.appearance,
+      [for (final m in ThemeMode.values) (m, _themeLabel(s, m))],
+      prefs.themeMode,
+    );
+    if (mode != null) await prefs.setThemeMode(mode);
+  }
+
+  Future<void> _chooseLanguage() async {
+    final s = S.of(context);
+    final prefs = widget.preferences;
+    // '' representa "automático" porque showDialog devuelve null al cerrar sin elegir.
+    final code = await _pick<String>(
+      s.language,
+      [('', s.languageSystem), ('es', 'Español'), ('en', 'English')],
+      prefs.languageCode ?? '',
+    );
+    if (code != null) await prefs.setLanguage(code.isEmpty ? null : code);
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return PopScope(
       canPop: _tab == 0,
       onPopInvokedWithResult: (didPop, _) {
@@ -157,7 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           actions: [
             IconButton(
-              tooltip: 'Abrir TikTok',
+              tooltip: s.openNetwork('TikTok'),
               onPressed: () => widget.engine.openUrl(SocialNetwork.tiktok.appUrl),
               icon: const NetworkLogo(network: SocialNetwork.tiktok, size: 32),
             ),
@@ -185,10 +248,10 @@ class _HomeScreenState extends State<HomeScreen> {
               selectedIndex: _tab,
               onDestinationSelected: (i) => setState(() => _tab = i),
               destinations: [
-                const NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home),
-                  label: 'Inicio',
+                NavigationDestination(
+                  icon: const Icon(Icons.home_outlined),
+                  selectedIcon: const Icon(Icons.home),
+                  label: s.tabHome,
                 ),
                 NavigationDestination(
                   icon: Badge(
@@ -201,7 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: Text('$active'),
                     child: const Icon(Icons.download),
                   ),
-                  label: 'Historial',
+                  label: s.tabHistory,
                 ),
               ],
             );
@@ -215,78 +278,106 @@ class _HomeScreenState extends State<HomeScreen> {
     return Drawer(
       child: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([widget.engine, widget.accounts]),
+          listenable: Listenable.merge([widget.engine, widget.accounts, widget.preferences]),
           builder: (context, _) {
+            final s = S.of(context);
             final engine = widget.engine;
+            final prefs = widget.preferences;
+            final muted = Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                );
             return ListView(
               children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 20, 24, 8),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
                   child: Row(
                     children: [
-                      AppLogo(size: 56),
-                      SizedBox(width: 14),
-                      AppTitle(),
+                      const AppLogo(size: 56),
+                      const SizedBox(width: 14),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const AppTitle(),
+                          Text(s.byVixago, style: muted),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, 12),
-                  child: Text('Descarga sin publicidad'),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                  child: Text(s.tagline),
                 ),
                 const Divider(),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 8, 24, 4),
-                  child: Text('Cuentas (opcional)', style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
+                _sectionTitle(s.accountsOptional),
                 for (final network in SocialNetwork.values.where((n) => n.supportsLogin))
                   ListTile(
                     leading: NetworkLogo(network: network, size: 32),
                     title: Text(network.label),
-                    subtitle: Text(widget.accounts.isConnected(network) ? 'Conectada' : 'Sin conectar'),
-                    trailing: Text(widget.accounts.isConnected(network) ? 'Salir' : 'Conectar'),
+                    subtitle: Text(widget.accounts.isConnected(network) ? s.connected : s.notConnected),
+                    trailing: Text(widget.accounts.isConnected(network) ? s.logout : s.connect),
                     onTap: () => _toggleAccount(network),
                   ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
-                  child: Text(
-                    'Solo hace falta si un video dice que pide iniciar sesión.',
-                    style: TextStyle(fontSize: 12),
-                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                  child: Text(s.accountsHint, style: const TextStyle(fontSize: 12)),
                 ),
                 const Divider(),
+                _sectionTitle(s.settings),
+                ListTile(
+                  leading: const Icon(Icons.brightness_6_outlined),
+                  title: Text(s.appearance),
+                  subtitle: Text(_themeLabel(s, prefs.themeMode)),
+                  onTap: _chooseTheme,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.language),
+                  title: Text(s.language),
+                  subtitle: Text(_languageLabel(s, prefs.languageCode)),
+                  onTap: _chooseLanguage,
+                ),
                 ListTile(
                   leading: engine.updating
                       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.system_update_alt),
-                  title: const Text('Actualizar motor de descarga'),
-                  subtitle: Text(engine.version != null ? 'Versión ${engine.version}' : 'Úsalo si las descargas fallan'),
+                  title: Text(s.updateEngine),
+                  subtitle: Text(engine.version != null ? s.engineVersion(engine.version!) : s.updateEngineHint),
                   onTap: engine.updating || engine.status != EngineStatus.ready ? null : _updateEngine,
                 ),
                 ListTile(
                   leading: const Icon(Icons.info_outline),
-                  title: const Text('Acerca de'),
+                  title: Text(s.about),
                   onTap: () {
                     Navigator.pop(context);
                     showAboutDialog(
                       context: context,
                       applicationName: 'DownPlayer',
-                      applicationVersion: '1.1.0',
+                      applicationVersion: '1.2.0',
                       applicationIcon: const AppLogo(size: 56),
-                      children: const [
-                        Text(
-                          'Descarga videos y audio de TikTok, Facebook, Instagram y YouTube, sin publicidad. '
-                          'Usa el motor libre yt-dlp. Descarga solo contenido que tengas derecho a guardar.',
-                        ),
+                      applicationLegalese: s.legalese,
+                      children: [
+                        const SizedBox(height: 16),
+                        Text(s.aboutText),
                       ],
                     );
                   },
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                  child: Text('DownPlayer 1.2.0 · ${s.byVixago}', style: muted),
                 ),
               ],
             );
           },
         ),
       ),
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -300,6 +391,7 @@ class _NetworkMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -307,11 +399,11 @@ class _NetworkMenu extends StatelessWidget {
         ListenableBuilder(listenable: engine, builder: (context, _) => _EngineBanner(engine: engine)),
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
-          child: Text('¿De dónde es el video?', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+          child: Text(s.whereFrom, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
-          child: Text('Elige la red y pega el enlace.', style: theme.textTheme.bodyMedium),
+          child: Text(s.chooseNetwork, style: theme.textTheme.bodyMedium),
         ),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -334,12 +426,8 @@ class _NetworkMenu extends StatelessWidget {
         Card(
           child: ListTile(
             leading: const Icon(Icons.lightbulb_outline),
-            title: const Text('Más rápido'),
-            subtitle: Text(
-              'En TikTok, Facebook, Instagram o YouTube toca "Compartir" y elige DownPlayer. '
-              'La app abre el video sola.',
-              style: theme.textTheme.bodySmall,
-            ),
+            title: Text(s.faster),
+            subtitle: Text(s.fasterHint, style: theme.textTheme.bodySmall),
           ),
         ),
       ],
@@ -355,6 +443,7 @@ class _NetworkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final theme = Theme.of(context);
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -371,10 +460,10 @@ class _NetworkCard extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 switch (network) {
-                  SocialNetwork.tiktok => 'Sin marca de agua',
-                  SocialNetwork.facebook => 'Videos y reels',
-                  SocialNetwork.instagram => 'Reels y videos',
-                  SocialNetwork.youtube => 'Videos, Shorts y MP3',
+                  SocialNetwork.tiktok => s.tiktokTagline,
+                  SocialNetwork.facebook => s.facebookTagline,
+                  SocialNetwork.instagram => s.instagramTagline,
+                  SocialNetwork.youtube => s.youtubeTagline,
                 },
                 style: theme.textTheme.bodySmall,
                 textAlign: TextAlign.center,
@@ -395,6 +484,7 @@ class _EngineBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final scheme = Theme.of(context).colorScheme;
     switch (engine.status) {
       case EngineStatus.ready:
@@ -402,10 +492,10 @@ class _EngineBanner extends StatelessWidget {
       case EngineStatus.preparing:
         return Card(
           color: scheme.secondaryContainer,
-          child: const ListTile(
-            leading: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
-            title: Text('Preparando el motor de descarga…'),
-            subtitle: Text('La primera vez tarda unos segundos.'),
+          child: ListTile(
+            leading: const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+            title: Text(s.enginePreparing),
+            subtitle: Text(s.enginePreparingHint),
           ),
         );
       case EngineStatus.failed:
@@ -413,9 +503,9 @@ class _EngineBanner extends StatelessWidget {
           color: scheme.errorContainer,
           child: ListTile(
             leading: const Icon(Icons.error_outline),
-            title: const Text('El motor de descarga no arrancó'),
+            title: Text(s.engineFailed),
             subtitle: Text(engine.initError ?? ''),
-            trailing: TextButton(onPressed: engine.init, child: const Text('Reintentar')),
+            trailing: TextButton(onPressed: engine.init, child: Text(s.retry)),
           ),
         );
     }

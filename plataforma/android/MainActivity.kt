@@ -91,8 +91,12 @@ class MainActivity : FlutterActivity() {
             }
             "deleteMedia" -> background(result) { deleteMedia(call.argument<String>("uri")!!) }
             "mediaExists" -> background(result) { mediaExists(call.argument<String>("uri")!!) }
-            "share" -> result.success(share(call.argument<String>("uri")!!, call.argument<String>("mime")!!))
-            "openWith" -> result.success(openWith(call.argument<String>("uri")!!, call.argument<String>("mime")!!))
+            "share" -> result.success(
+                share(call.argument<String>("uri")!!, call.argument<String>("mime")!!, call.argument<String>("title")),
+            )
+            "openWith" -> result.success(
+                openWith(call.argument<String>("uri")!!, call.argument<String>("mime")!!, call.argument<String>("title")),
+            )
             "openUrl" -> result.success(tryStart(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url")!!))))
             "saveCookies" -> result.success(
                 saveCookies(call.argument<String>("domain")!!, call.argument<String>("required")!!),
@@ -249,21 +253,22 @@ class MainActivity : FlutterActivity() {
 
     // ---------- Compartir y abrir ----------
 
-    private fun share(uri: String, mime: String): Boolean {
+    /** [title]: título del selector, en el idioma de la app. */
+    private fun share(uri: String, mime: String, title: String?): Boolean {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = mime
             putExtra(Intent.EXTRA_STREAM, Uri.parse(uri))
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        return tryStart(Intent.createChooser(send, "Compartir"))
+        return tryStart(Intent.createChooser(send, title ?: "Share"))
     }
 
-    private fun openWith(uri: String, mime: String): Boolean {
+    private fun openWith(uri: String, mime: String, title: String?): Boolean {
         val view = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(Uri.parse(uri), mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        return tryStart(Intent.createChooser(view, "Abrir con"))
+        return tryStart(Intent.createChooser(view, title ?: "Open with"))
     }
 
     private fun tryStart(intent: Intent): Boolean =

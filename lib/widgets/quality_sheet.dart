@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/strings.dart';
 import '../models/download.dart';
 import '../models/media_info.dart';
 import '../services/preferences_service.dart';
@@ -19,6 +20,7 @@ Future<DownloadOption?> showQualitySheet(
     if (seen.add(qualityName(q.p))) qualities.add(q);
   }
   final preferred = _closestTo(preferences.preferredOption, qualities);
+  final s = S.of(context);
 
   final option = await showModalBottomSheet<DownloadOption>(
     context: context,
@@ -35,12 +37,12 @@ Future<DownloadOption?> showQualitySheet(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
-              child: Text('Elige la calidad', style: Theme.of(context).textTheme.titleLarge),
+              child: Text(s.chooseQuality, style: Theme.of(context).textTheme.titleLarge),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
               child: Text(
-                'Más calidad = mejor imagen, pero ocupa más espacio.',
+                s.qualityHint,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
@@ -48,8 +50,8 @@ Future<DownloadOption?> showQualitySheet(
               if (qualities.isEmpty)
                 _OptionTile(
                   icon: Icons.movie_outlined,
-                  title: info.bestHeight != null ? qualityName(info.bestHeight!) : 'Video MP4',
-                  details: 'Única calidad disponible',
+                  title: info.bestHeight != null ? qualityName(info.bestHeight!) : s.videoMp4,
+                  details: s.onlyQuality,
                   option: const DownloadOption.video(),
                   selected: preferred?.isAudio == false,
                 ),
@@ -57,7 +59,7 @@ Future<DownloadOption?> showQualitySheet(
                 _OptionTile(
                   icon: i == 0 ? Icons.high_quality : Icons.movie_outlined,
                   title: qualityName(qualities[i].p),
-                  details: _details(qualities[i], best: i == 0),
+                  details: _details(s, qualities[i], best: i == 0),
                   // La mejor se pide como "la mejor disponible" para no perderla si cambia un poco.
                   option: i == 0 ? const DownloadOption.video() : DownloadOption.video(maxHeight: qualities[i].p),
                   selected: preferred != null &&
@@ -68,9 +70,9 @@ Future<DownloadOption?> showQualitySheet(
             const Divider(),
             _OptionTile(
               icon: Icons.music_note,
-              title: 'Solo audio MP3',
+              title: s.audioOnlyMp3,
               details: [
-                'La mejor calidad de sonido',
+                s.bestSound,
                 if (info.audioBytes != null) '≈ ${formatBytes(info.audioBytes)}',
               ].join(' · '),
               option: const DownloadOption.audio(),
@@ -101,10 +103,10 @@ DownloadOption? _closestTo(DownloadOption? preferred, List<VideoQuality> qualiti
   return DownloadOption.video(maxHeight: qualities.last.p);
 }
 
-String _details(VideoQuality q, {required bool best}) {
+String _details(S s, VideoQuality q, {required bool best}) {
   return [
-    if (best) 'Máxima calidad',
-    if (q.p <= 480 && !best) 'Ocupa poco espacio',
+    if (best) s.maxQuality,
+    if (q.p <= 480 && !best) s.smallSize,
     if (q.fps != null && q.fps! >= 50) '${q.fps} fps',
     if (q.bytes != null) '≈ ${formatBytes(q.bytes)}',
   ].join(' · ');
@@ -142,7 +144,7 @@ class _OptionTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(color: scheme.primary, borderRadius: BorderRadius.circular(10)),
-              child: Text('Tu preferida', style: TextStyle(color: scheme.onPrimary, fontSize: 11)),
+              child: Text(S.of(context).yourFavorite, style: TextStyle(color: scheme.onPrimary, fontSize: 11)),
             ),
           ],
         ],

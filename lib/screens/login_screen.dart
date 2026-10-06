@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../l10n/strings.dart';
 import '../models/social_network.dart';
 import '../services/accounts_service.dart';
 
@@ -61,18 +62,19 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pop(context, true);
     } else if (!silent) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Todavía no has iniciado sesión. Escribe tu usuario y contraseña.')),
+        SnackBar(content: Text(S.of(context).notLoggedYet)),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text('Conectar ${widget.network.label}'),
+        title: Text(s.connectNetwork(widget.network.label)),
         actions: [
-          TextButton(onPressed: () => _check(), child: const Text('Listo')),
+          TextButton(onPressed: () => _check(), child: Text(s.done)),
         ],
         bottom: _loading
             ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator(minHeight: 3))
@@ -81,11 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Column(
         children: [
           MaterialBanner(
-            content: Text(
-              'Inicia sesión en la página oficial de ${widget.network.label}. '
-              'DownPlayer no ve tu contraseña; solo usa la sesión para descargar '
-              'videos que la red no muestra sin cuenta.',
-            ),
+            content: Text(s.loginBanner(widget.network.label)),
             leading: const Icon(Icons.lock_outline),
             actions: const [SizedBox.shrink()],
           ),

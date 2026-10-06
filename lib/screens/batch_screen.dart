@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/strings.dart';
 import '../models/download.dart';
 import '../models/media_info.dart';
 import '../models/social_network.dart';
@@ -62,10 +63,10 @@ class _BatchScreenState extends State<BatchScreen> {
     return i < 0 ? 0 : i;
   }
 
-  String _choiceLabel(DownloadOption o) {
-    if (o.isAudio) return 'Solo audio MP3';
-    if (o.maxHeight == null) return 'Mejor calidad disponible';
-    return 'Hasta ${qualityName(o.maxHeight!)}';
+  String _choiceLabel(S s, DownloadOption o) {
+    if (o.isAudio) return s.audioOnlyMp3;
+    if (o.maxHeight == null) return s.bestAvailable;
+    return s.upTo(qualityName(o.maxHeight!));
   }
 
   Future<void> _load() async {
@@ -120,7 +121,7 @@ class _BatchScreenState extends State<BatchScreen> {
       );
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${chosen.length} descargas en cola. Míralas en Historial.')),
+      SnackBar(content: Text(S.of(context).batchQueued(chosen.length))),
     );
     widget.preferences.rememberOption(_option);
     setState(_selected.clear);
@@ -128,18 +129,19 @@ class _BatchScreenState extends State<BatchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context);
     final entries = _entries;
     final allSelected = entries != null && entries.isNotEmpty && _selected.length == entries.length;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title?.isNotEmpty == true ? widget.title! : 'Descarga por lotes',
+        title: Text(widget.title?.isNotEmpty == true ? widget.title! : s.batchDownload,
             maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           if (entries != null && entries.isNotEmpty)
             TextButton(
               onPressed: _toggleAll,
-              child: Text(allSelected ? 'Ninguno' : 'Todos'),
+              child: Text(allSelected ? s.selectNone : s.selectAll),
             ),
         ],
       ),
@@ -153,11 +155,11 @@ class _BatchScreenState extends State<BatchScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Calidad',
-                        prefixIcon: Icon(Icons.high_quality),
+                      decoration: InputDecoration(
+                        labelText: s.quality,
+                        prefixIcon: const Icon(Icons.high_quality),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
@@ -165,7 +167,7 @@ class _BatchScreenState extends State<BatchScreen> {
                           isExpanded: true,
                           items: [
                             for (var i = 0; i < _choices.length; i++)
-                              DropdownMenuItem(value: i, child: Text(_choiceLabel(_choices[i]))),
+                              DropdownMenuItem(value: i, child: Text(_choiceLabel(s, _choices[i]))),
                           ],
                           onChanged: (i) {
                             if (i != null) setState(() => _option = _choices[i]);
@@ -180,9 +182,7 @@ class _BatchScreenState extends State<BatchScreen> {
                       child: FilledButton.icon(
                         onPressed: _selected.isEmpty ? null : _downloadSelected,
                         icon: const Icon(Icons.download),
-                        label: Text(_selected.isEmpty
-                            ? 'Elige los videos'
-                            : 'Descargar ${_selected.length} ${_selected.length == 1 ? 'video' : 'videos'}'),
+                        label: Text(_selected.isEmpty ? s.chooseVideos : s.downloadNVideos(_selected.length)),
                       ),
                     ),
                   ],
@@ -193,6 +193,7 @@ class _BatchScreenState extends State<BatchScreen> {
   }
 
   Widget _body(List<BatchEntry>? entries) {
+    final s = S.of(context);
     if (_error != null) {
       return Center(
         child: Padding(
@@ -203,30 +204,30 @@ class _BatchScreenState extends State<BatchScreen> {
               const Icon(Icons.error_outline, size: 48),
               const SizedBox(height: 12),
               Text(
-                'No se pudieron cargar los videos de este perfil.\n$_error',
+                s.batchLoadError(_error!),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              FilledButton.tonal(onPressed: _load, child: const Text('Reintentar')),
+              FilledButton.tonal(onPressed: _load, child: Text(s.retry)),
             ],
           ),
         ),
       );
     }
     if (entries == null) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Cargando videos… puede tardar un poco'),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(s.loadingVideos),
           ],
         ),
       );
     }
     if (entries.isEmpty) {
-      return const Center(child: Text('No se encontraron videos.'));
+      return Center(child: Text(s.noVideos));
     }
 
     final vertical = widget.network == SocialNetwork.tiktok;
