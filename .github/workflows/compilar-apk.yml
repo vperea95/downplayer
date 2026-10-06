@@ -1,0 +1,54 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generar carpeta android
+        run: |
+          flutter create --org com.downplayer --project-name downplayer --platforms=android .
+          rm -rf test
+
+      - name: Configurar motor de descarga (yt-dlp)
+        run: |
+          cp plataforma/android/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          cp plataforma/android/proguard-rules.pro android/app/proguard-rules.pro
+          MAIN=$(find android/app/src/main -name MainActivity.kt)
+          PKG=$(head -1 "$MAIN")
+          { echo "$PKG"; tail -n +2 plataforma/android/MainActivity.kt; } > "$MAIN"
+          python3 plataforma/android/configurar_gradle.py android/app
+          cat android/app/build.gradle*
+
+      - name: Instalar dependencias
+        run: flutter pub get || flutter pub upgrade --major-versions
+
+      - name: Compilar APK
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+
+      - name: Publicar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: downplayer-apk
+          path: |
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
