@@ -7,6 +7,8 @@ Lo ejecuta el workflow: python3 plataforma/android/configurar_gradle.py android/
   Android debe extraerlos al instalar para poder ejecutarlos.
 - Reglas de ProGuard para que R8 no borre clases de la librería.
 - Dependencias de la librería y de ffmpeg (unir video+audio y convertir a MP3).
+- Lint: no detiene la compilación de release (Flutter/AGP de noviembre de 2026
+  empezaron a abortar en lintVital; las advertencias se publican en el workflow).
 """
 import os
 import re
@@ -32,6 +34,10 @@ android {
             proguardFiles("proguard-rules.pro")
         }
     }
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
 }
 
 dependencies {
@@ -52,6 +58,10 @@ android {
         release {
             proguardFiles 'proguard-rules.pro'
         }
+    }
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
     }
 }
 

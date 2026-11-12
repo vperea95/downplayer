@@ -85,7 +85,11 @@ jobs:
         if: failure()
         run: |
           touch build.log
-          grep -E "Error:|error:|^e: |What went wrong|FAILURE|Exception" -A4 build.log | head -80 > errores.txt || true
+          grep -E "Error:|error:|^e: |What went wrong|FAILURE|Exception|Lint found" -A6 build.log | head -80 > errores.txt || true
+          # Errores de lint: vienen en el reporte de texto, no en la salida de la compilación.
+          for r in $(find build android -name "lint-results*.txt" 2>/dev/null); do
+            grep -E "Error|Warning" -A2 "$r" | head -40 >> errores.txt || true
+          done
           split -l 16 errores.txt parte_
           for f in parte_*; do
             [ -f "$f" ] || continue
