@@ -10,6 +10,7 @@ Se construyó con la misma forma de trabajo que Radio Colombia (`C:\Users\ANDRES
 - El usuario trabaja en Windows, con `cmd`, en la carpeta `C:\Users\ANDRES\Documents\proyectos de apps\descargador de videos tiktok\DownPlayerTiktok`.
 - **No tiene Flutter, Java ni Android SDK instalados localmente.** El APK se compila en GitHub Actions al hacer push a `main`. No proponer `flutter run` local salvo que el usuario decida instalar Flutter.
 - Cuando haya que hacer pasos manuales (git, GitHub, instalar en el celular), darlos **uno a la vez** y en lenguaje simple.
+- **Pedir autorización al usuario antes de hacer commit/push al repositorio** (lo pidió expresamente).
 - Para publicar cambios:
   ```bash
   git add .
@@ -33,7 +34,8 @@ El repositorio **no contiene** las carpetas `android/` ni `ios/`. El workflow `.
 
 Notas:
 - Cualquier cambio nativo de Android va en `plataforma/android/` y, si hace falta, en el workflow o en `configurar_gradle.py`.
-- El APK se firma con la llave debug que se genera en cada ejecución, que cambia cada vez. Por eso **hay que desinstalar la versión anterior antes de instalar una nueva** (se pierde el historial de la app; los archivos descargados siguen en la galería).
+- **Firma fija (Vixago), desde v1.3.0.** La llave está FUERA del repositorio en `C:\Users\ANDRES\Documents\proyectos de apps\_firma-vixago\` (`vixago-release.p12`, PKCS12, alias `vixago`; contraseña en `LEEME.txt`; `firma-base64.txt` para el secreto). Es la misma llave de Ficonza y de todas las apps de Vixago. **Nunca subirla ni copiar la contraseña al repositorio.** Secretos del repositorio: `SIGNING_KEYSTORE_BASE64` y `SIGNING_KEYSTORE_PASSWORD`. El paso "Preparar firma fija" va **antes** de "Configurar motor" porque `configurar_gradle.py` agrega un segundo bloque `buildTypes` y `configurar_firma.py` necesita encontrar uno solo; limpia espacios de la contraseña, la prueba con `keytool -list` y, si no abre, compila con la llave debug y avisa. "Verificar firma" publica el titular con `apksigner` (debe decir CN=Vixago). La primera instalación con la llave de Vixago exige desinstalar una última vez; desde ahí las versiones se instalan encima.
+- Si la compilación falla, "Mostrar errores" publica los errores como anotaciones, que se leen sin iniciar sesión en `https://api.github.com/repos/vperea95/downplayer/check-runs/<id del job>/annotations`.
 - GitHub Actions a veces se queda en "Waiting for a runner". Si pasan más de 15 minutos: Cancel workflow y luego Re-run all jobs.
 
 ## Stack
@@ -97,13 +99,15 @@ plataforma/android/                AndroidManifest.xml, MainActivity.kt, proguar
 
 **Apariencia.** `MaterialApp` tiene `theme` (claro), `darkTheme` (oscuro) y `themeMode` desde `PreferencesService`, que por defecto es `ThemeMode.system` (sigue al celular). El menú lateral tiene "Apariencia": Predeterminado del sistema, Claro u Oscuro. El reproductor siempre es negro.
 
-**Firma Vixago.** Aparece en el menú lateral ("por Vixago" bajo el nombre y "DownPlayer 1.2.0 · por Vixago" al final), en "Acerca de" (`applicationLegalese: © 2026 Vixago` y "Desarrollada por Vixago") y en la pantalla de arranque ("from Vixago", en Android 12+ también). La llave con la que se firma el APK sigue siendo la debug de cada compilación (ver pendientes).
+**Firma Vixago.** Aparece en el menú lateral ("por Vixago" bajo el nombre y "DownPlayer 1.2.0 · por Vixago" al final), en "Acerca de" (`applicationLegalese: © 2026 Vixago` y "Desarrollada por Vixago") y en la pantalla de arranque ("from Vixago", en Android 12+ también). El APK se firma con la llave fija de Vixago (ver "Cómo se compila").
 
 **Lotes.** TikTok: `https://www.tiktok.com/@usuario`. YouTube: `channel_url + /videos`, o el enlace de lista/canal pegado directamente (`isCollectionUrl`). Facebook e Instagram no tienen lotes.
 
 **Instagram y Facebook.** Muchos videos piden sesión. `LoginScreen` abre la página oficial en un WebView. `saveCookies` copia las cookies del `CookieManager` de Android a `filesDir/cookies/<dominio>.txt` (formato Netscape) solo si existe la cookie de sesión (`sessionid` o `c_user`). Si la cuenta está conectada, se pasa `--cookies` a yt-dlp. `friendlyError` marca `needsLogin` para mostrar el botón "Conectar cuenta".
 
-**Actualización de yt-dlp.** Las redes cambian seguido. La app actualiza yt-dlp en segundo plano una vez cada 24 h (`engine_last_update` en SharedPreferences), y también desde el menú lateral ("Actualizar motor de descarga"). Es lo primero que se debe probar cuando una red deja de funcionar.
+**Actualización de yt-dlp (pedido del usuario: automática, sin hacer clic).** Las redes cambian seguido. `Engine.init()` lanza `_updateQuietly()` en segundo plano **cada vez que se abre la app** (ya no una vez al día; no hay botón manual: el menú lateral solo informa "Se actualiza solo al abrir la app · versión X"). `getInfo`, `getCollection` y `download` esperan esa actualización (`_waitForUpdate`, máx. 30 s). `_withRetry`: si un análisis falla por algo que no sea sesión ni cancelación y el motor aún no se actualizó en la sesión, lo actualiza y reintenta una vez.
+
+**Contenido restringido de Instagram.** "This content isn't available to everyone: It can't be seen by certain audiences" = el creador lo limitó por edad o país; Instagram solo lo muestra con sesión iniciada. Ningún descargador lo obtiene sin cuenta. `friendlyError` lo traduce (`errAudience`, `needsLogin`) y la pantalla ofrece "Conectar Instagram", que al volver reintenta solo. Con cuenta conectada, antes de cada análisis/descarga se llama a `AccountsService.refresh` para copiar de nuevo las cookies del WebView (que no caduquen).
 
 **Compartir.** El manifest tiene un `intent-filter` `SEND text/plain`. Con la app cerrada, Dart lo pide con `takeSharedText`; con la app abierta, Kotlin llama a `sharedText`. `HomeScreen` detecta la red y abre `DownloadScreen` con el enlace, que se analiza solo.
 
@@ -114,10 +118,10 @@ plataforma/android/                AndroidManifest.xml, MainActivity.kt, proguar
 - Repositorio: https://github.com/vperea95/downplayer (rama `main`).
 - v1 compilada con éxito en Actions al primer intento (06/10/2026; el artifact con los 2 APK pesa unos 119 MB). Falta probarla en un celular.
 - v1.1: ícono propio en todo lado y selección de calidad con peso aproximado. Compilada con éxito en Actions (06/10/2026). Falta probarla en un celular.
-- v1.2: idioma del sistema (español/inglés), apariencia del sistema con opción Claro/Oscuro, firma "por Vixago".
+- v1.2: idioma del sistema (español/inglés), apariencia del sistema con opción Claro/Oscuro, firma "por Vixago". Compilada con éxito en Actions (06/10/2026).
+- v1.3.0 (12/11/2026): firma fija de Vixago, motor actualizado solo al abrir la app (sin botón), reintento automático tras actualizar, error de Instagram "certain audiences" traducido con conexión de cuenta, sesión refrescada antes de cada video.
 
 ## Pendientes e ideas
 
-- Llave de firma fija a nombre de Vixago (keystore en GitHub Secrets) para actualizar sin desinstalar ni perder el historial.
 - Descargas en segundo plano con un servicio en primer plano y una notificación de progreso (hoy siguen mientras Android no cierre la app).
 - Fotos y carruseles de TikTok e Instagram (hoy se toma solo el primer video).

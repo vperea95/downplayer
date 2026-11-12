@@ -107,20 +107,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ..showSnackBar(SnackBar(content: Text(text)));
   }
 
-  Future<void> _updateEngine() async {
-    final s = S.of(context);
-    Navigator.pop(context); // cierra el menú lateral
-    _snack(s.engineChecking);
-    try {
-      final updated = await widget.engine.update();
-      if (!mounted) return;
-      _snack(updated ? s.engineUpdated(widget.engine.version ?? '') : s.engineUpToDate);
-    } on EngineException catch (e) {
-      if (!mounted) return;
-      _snack(s.engineUpdateFailed(e.message));
-    }
-  }
-
   Future<void> _toggleAccount(SocialNetwork network) async {
     final s = S.of(context);
     Navigator.pop(context);
@@ -340,9 +326,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: engine.updating
                       ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.system_update_alt),
-                  title: Text(s.updateEngine),
-                  subtitle: Text(engine.version != null ? s.engineVersion(engine.version!) : s.updateEngineHint),
-                  onTap: engine.updating || engine.status != EngineStatus.ready ? null : _updateEngine,
+                  title: Text(s.downloadEngine),
+                  subtitle: Text(engine.updating
+                      ? s.engineUpdatingNow
+                      : s.engineAutoUpdate(engine.version ?? '')),
                 ),
                 ListTile(
                   leading: const Icon(Icons.info_outline),
@@ -352,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     showAboutDialog(
                       context: context,
                       applicationName: 'DownPlayer',
-                      applicationVersion: '1.2.0',
+                      applicationVersion: '1.3.0',
                       applicationIcon: const AppLogo(size: 56),
                       applicationLegalese: s.legalese,
                       children: [
@@ -364,7 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                  child: Text('DownPlayer 1.2.0 · ${s.byVixago}', style: muted),
+                  child: Text('DownPlayer 1.3.0 · ${s.byVixago}', style: muted),
                 ),
               ],
             );

@@ -105,6 +105,7 @@ class DownloadManager extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (accounts.isConnected(task.network)) await accounts.refresh(task.network);
       final path = await engine.download(
         id: task.id,
         url: task.url,

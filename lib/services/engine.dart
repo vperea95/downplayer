@@ -3,7 +3,6 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../l10n/strings.dart';
 import '../models/media_info.dart';
@@ -34,12 +33,17 @@ class Engine extends ChangeNotifier {
   }
 
   static const _channel = MethodChannel('downplayer/engine');
-  static const _lastUpdateKey = 'engine_last_update';
 
   EngineStatus status = EngineStatus.preparing;
   String? version;
   String? initError;
   bool updating = false;
+
+  /// Actualización de yt-dlp que se lanza sola al abrir la app.
+  Future<void>? _startupUpdate;
+
+  /// Ya se actualizó en esta sesión (para no reintentar actualizando dos veces).
+  bool _updatedThisSession = false;
 
   /// Enlaces que llegan con "Compartir -> DownPlayer" mientras la app está abierta.
   void Function(String text)? onSharedText;
@@ -49,7 +53,8 @@ class Engine extends ChangeNotifier {
   static bool get isSupported => !kIsWeb && Platform.isAndroid;
 
   /// La primera vez descomprime Python y ffmpeg (tarda unos segundos).
-  /// Después actualiza yt-dlp una vez al día, porque las redes cambian seguido.
+  /// Después actualiza yt-dlp en segundo plano CADA VEZ que se abre la app, porque
+  /// las redes cambian seguido (pedido del usuario: nada de actualizar a mano).
   Future<void> init() async {
     if (!isSupported) {
       status = EngineStatus.failed;
@@ -67,19 +72,39 @@ class Engine extends ChangeNotifier {
       initError = e.message;
     }
     notifyListeners();
-    if (status == EngineStatus.ready) _dailyUpdate();
+    if (status == EngineStatus.ready) _startupUpdate = _updateQuietly();
   }
 
-  Future<void> _dailyUpdate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final last = prefs.getInt(_lastUpdateKey) ?? 0;
-    final elapsed = DateTime.now().millisecondsSinceEpoch - last;
-    if (elapsed < const Duration(hours: 24).inMilliseconds) return;
+  Future<void> _updateQuietly() async {
     try {
       await update();
-      await prefs.setInt(_lastUpdateKey, DateTime.now().millisecondsSinceEpoch);
+      _updatedThisSession = true;
     } catch (e) {
       debugPrint('No se pudo actualizar yt-dlp: $e');
+    }
+  }
+
+  /// Antes de pedir un video se espera a que termine la actualización del arranque
+  /// (como mucho 30 s), para usar siempre la versión más nueva de yt-dlp.
+  Future<void> _waitForUpdate() async {
+    final pending = _startupUpdate;
+    if (pending == null) return;
+    try {
+      await pending.timeout(const Duration(seconds: 30));
+    } catch (_) {}
+  }
+
+  /// Ejecuta [action]; si falla por algo que no sea la sesión ni una cancelación y el
+  /// motor todavía no se actualizó en esta sesión, lo actualiza y reintenta una vez.
+  Future<T> _withRetry<T>(Future<T> Function() action) async {
+    await _waitForUpdate();
+    try {
+      return await action();
+    } on EngineException catch (e) {
+      if (e.canceled || e.needsLogin || _updatedThisSession) rethrow;
+      await _updateQuietly();
+      if (!_updatedThisSession) rethrow;
+      return action();
     }
   }
 
@@ -98,7 +123,9 @@ class Engine extends ChangeNotifier {
   }
 
   Future<MediaInfo> getInfo(String url, SocialNetwork network, {String? cookies}) async {
-    final out = await _invoke<String>('getInfo', {'url': url, 'playlist': false, 'cookies': cookies});
+    final out = await _withRetry(
+      () => _invoke<String>('getInfo', {'url': url, 'playlist': false, 'cookies': cookies}),
+    );
     final json = _decodeJson(out);
     if (json['_type'] == 'playlist') {
       // Por ejemplo, un carrusel de Instagram: se toma el primer video.
@@ -112,7 +139,9 @@ class Engine extends ChangeNotifier {
 
   /// Videos de un perfil, canal o lista (hasta 60).
   Future<List<BatchEntry>> getCollection(String url, SocialNetwork network, {String? cookies}) async {
-    final out = await _invoke<String>('getInfo', {'url': url, 'playlist': true, 'cookies': cookies});
+    final out = await _withRetry(
+      () => _invoke<String>('getInfo', {'url': url, 'playlist': true, 'cookies': cookies}),
+    );
     final json = _decodeJson(out);
     final entries = (json['entries'] as List?) ?? const [];
     return entries
@@ -130,6 +159,7 @@ class Engine extends ChangeNotifier {
     String? cookies,
     required ProgressCallback onProgress,
   }) async {
+    await _waitForUpdate();
     _progressListeners[id] = onProgress;
     try {
       final path = await _invoke<String>('download', {
@@ -234,6 +264,16 @@ class Engine extends ChangeNotifier {
     final text = raw.toLowerCase();
     bool has(String s) => text.contains(s);
 
+    // Instagram: "This content isn't available to everyone: It can't be seen by certain
+    // audiences". El creador lo restringió (edad o país): solo se ve con sesión iniciada.
+    if (has("isn't available to everyone") ||
+        has('is not available to everyone') ||
+        has('certain audiences') ||
+        has('restricted video') ||
+        has('age-restricted') ||
+        has('restricted content')) {
+      return EngineException(t.errAudience, needsLogin: true);
+    }
     if (has('login required') ||
         has('requested content is not available') ||
         has('rate-limit reached') ||

@@ -83,8 +83,11 @@ class S {
   String get engineFailed => _t('El motor de descarga no arrancó', "The download engine didn't start");
   String get enginePreparingWait =>
       _t('El motor de descarga se está preparando. Espera unos segundos.', 'The download engine is getting ready. Wait a few seconds.');
-  String get updateEngine => _t('Actualizar motor de descarga', 'Update download engine');
-  String get updateEngineHint => _t('Úsalo si las descargas fallan', 'Use it if downloads fail');
+  String get downloadEngine => _t('Motor de descarga', 'Download engine');
+  String get engineUpdatingNow => _t('Actualizando a la versión más reciente…', 'Updating to the latest version…');
+  String engineAutoUpdate(String v) => v.isEmpty
+      ? _t('Se actualiza solo al abrir la app', 'Updates itself when the app opens')
+      : _t('Se actualiza solo al abrir la app · versión $v', 'Updates itself when the app opens · version $v');
   String engineVersion(String v) => _t('Versión $v', 'Version $v');
   String get engineChecking => _t('Buscando la versión más reciente del motor…', 'Looking for the latest engine version…');
   String engineUpdated(String v) => _t('Motor actualizado a la versión $v.', 'Engine updated to version $v.');
@@ -245,8 +248,12 @@ class S {
         'The app asked to log in to see this video. Connect your account from the menu and try again.',
       );
   String get errBot => _t(
-        'YouTube pidió verificar que no eres un robot. Espera unos minutos, actualiza el motor desde el menú y vuelve a intentar.',
-        "YouTube asked to verify you're not a robot. Wait a few minutes, update the engine from the menu and try again.",
+        'YouTube pidió verificar que no eres un robot. El motor se actualiza solo al abrir la app: espera unos minutos, cierra y vuelve a abrir DownPlayer, e intenta de nuevo.',
+        "YouTube asked to verify you're not a robot. The engine updates itself when the app opens: wait a few minutes, close and reopen DownPlayer, and try again.",
+      );
+  String get errAudience => _t(
+        'Instagram restringió este video a ciertas personas (por edad o país) y solo lo muestra con una cuenta con sesión iniciada. Conecta tu cuenta de Instagram una sola vez y se descargará.',
+        'Instagram restricted this video to certain audiences (age or country) and only shows it to logged-in accounts. Connect your Instagram account once and it will download.',
       );
   String get errPrivate =>
       _t('El video es privado. Solo se pueden descargar videos públicos.', 'The video is private. Only public videos can be downloaded.');

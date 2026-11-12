@@ -75,6 +75,7 @@ class _BatchScreenState extends State<BatchScreen> {
       _error = null;
     });
     try {
+      if (widget.accounts.isConnected(widget.network)) await widget.accounts.refresh(widget.network);
       final entries = await widget.engine.getCollection(
         widget.url,
         widget.network,

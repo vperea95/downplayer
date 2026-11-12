@@ -29,6 +29,34 @@ jobs:
           flutter create --org com.downplayer --project-name downplayer --platforms=android .
           rm -rf test
 
+      # Firma fija con la llave de Vixago (secretos del repositorio). Así cada APK nuevo
+      # se instala encima del anterior sin borrar los datos. Va ANTES de configurar el motor,
+      # porque configurar_gradle.py agrega un segundo bloque buildTypes.
+      # Antes de compilar se prueba que la contraseña abra la llave; si no, se compila con la
+      # llave de prueba y se deja un aviso (así siempre sale un APK).
+      - name: Preparar firma fija
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_PASSWORD_RAW: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+        run: |
+          # Quita espacios o saltos de línea que se hayan pegado sin querer en el secreto.
+          PW=$(printf '%s' "$SIGNING_PASSWORD_RAW" | tr -d '[:space:]')
+          if [ -z "$SIGNING_KEYSTORE_BASE64" ] || [ -z "$PW" ]; then
+            echo "::warning title=Sin firma fija::Falta el secreto SIGNING_KEYSTORE_BASE64 o SIGNING_KEYSTORE_PASSWORD. Se usa la llave de prueba: hay que desinstalar antes de instalar."
+            exit 0
+          fi
+          echo "::add-mask::$PW"
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$RUNNER_TEMP/firma.p12"
+          if ! ERR=$(keytool -list -keystore "$RUNNER_TEMP/firma.p12" -storetype PKCS12 -storepass "$PW" -alias vixago 2>&1); then
+            ERR=$(printf '%s' "$ERR" | head -2 | tr '\n' ' ')
+            echo "::warning title=Firma fija no disponible::La llave no abrió con la contraseña del secreto SIGNING_KEYSTORE_PASSWORD (largo recibido: ${#PW} caracteres). keytool dice: $ERR. Se usa la llave de prueba."
+            exit 0
+          fi
+          echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/firma.p12" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYSTORE_PASSWORD=$PW" >> "$GITHUB_ENV"
+          SIGNING_KEYSTORE_PATH="$RUNNER_TEMP/firma.p12" python3 plataforma/android/configurar_firma.py android/app
+          echo "::notice title=Firma fija::La llave de Vixago abrió correctamente."
+
       - name: Configurar motor de descarga (yt-dlp)
         run: |
           cp plataforma/android/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
@@ -48,7 +76,29 @@ jobs:
           dart run flutter_native_splash:create
 
       - name: Compilar APK
-        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+        run: |
+          set -o pipefail
+          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 2>&1 | tee build.log
+
+      # Si falla, publica los errores como anotaciones (se ven en el resumen sin iniciar sesión).
+      - name: Mostrar errores
+        if: failure()
+        run: |
+          touch build.log
+          grep -E "Error:|error:|^e: |What went wrong|FAILURE|Exception" -A4 build.log | head -80 > errores.txt || true
+          split -l 16 errores.txt parte_
+          for f in parte_*; do
+            [ -f "$f" ] || continue
+            msg=$(tr -d '\r' < "$f" | awk 'BEGIN{ORS="%0A"} {gsub(/%/,"%25"); print}')
+            echo "::error title=Error de compilación::$msg"
+          done
+
+      # keytool no lee la firma v2/v3 (la única que se usa con minSdk 24): se usa apksigner del SDK.
+      - name: Verificar firma
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          OWNER=$("$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk 2>&1 | grep -m1 "certificate DN" || true)
+          echo "::notice title=Firma del APK::${OWNER:-No se pudo leer la firma}"
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4

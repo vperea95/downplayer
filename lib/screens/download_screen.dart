@@ -117,6 +117,7 @@ class _DownloadScreenState extends State<DownloadScreen> {
       _info = null;
     });
     try {
+      if (widget.accounts.isConnected(_network)) await widget.accounts.refresh(_network);
       final info = await widget.engine.getInfo(url, _network, cookies: widget.accounts.cookiesFor(_network));
       if (!mounted) return;
       setState(() => _info = info);
